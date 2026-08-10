@@ -40,10 +40,14 @@ logger = logging.getLogger(__name__)
 # ============================================================
 
 async def check_blacklist(db: AsyncSession, blacklist_type: str, value: str) -> bool:
+    # 【P4-L5 2026-08-10 修复】P3-M9 软删规范: deleted_at 不为空 = 已删除, 不应判为撞黑.
+    # 之前漏过滤导致用户删除黑名单后还能撞黑 (实际是已软删的记录被捞出来).
+    # 跟 add_blacklist / get_blacklist / remove_blacklist 保持一致.
     bl = (await db.execute(
         select(RiskBlacklist).where(
             RiskBlacklist.blacklist_type == blacklist_type,
             RiskBlacklist.blacklist_value == value,
+            RiskBlacklist.deleted_at.is_(None),
         )
     )).scalar_one_or_none()
     if not bl:

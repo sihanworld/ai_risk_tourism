@@ -115,6 +115,9 @@ def _blacklist_reject(request: RiskCheckRequest, blocked_by: str) -> RiskCheckRe
         triggered_rules=[],
         features={},
         create_time=datetime.now(),
+        # 【P4-L5 2026-08-10】ml_score 保持 None, 前端不渲染 ML 评分块
+        # message 直接告诉用户"为什么拒绝", 不需要他懂 blocked_by 字段语义
+        message=f"撞黑名单: {blocked_by}",
         blocked_by=blocked_by,
     )
 
