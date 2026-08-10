@@ -32,13 +32,52 @@ class Settings(BaseSettings):
         """测试库异步 URL (用于 conftest.py 初始化测试库)"""
         return self.get_database_url_async(self.TEST_DB_NAME)
 
-    # ---- 风控决策阈值 ----
+    # ---- 风控决策阈值 (按 event_type 拆, 不同场景严苛度不同) ----
+    # 全局默认阈值 (向下兼容, RISK_PASS_THRESHOLD 等保留)
     # 评分 < PASS → 通过, < MARK → 标记, < REVIEW → 人工审核, >= REVIEW → 拒绝
     RISK_PASS_THRESHOLD: int = 30
     RISK_MARK_THRESHOLD: int = 60
     RISK_REVIEW_THRESHOLD: int = 80
     RISK_MULTI_RULE_BONUS: int = 3     # 多规则命中时, 每条额外规则加的分
     RISK_VETO_MIN_SCORE: int = 90      # 一票否决时强制的最低分
+
+    # 按 event_type 拆的阈值 (P4-L5 2026-08-10):
+    # 售后/物流比下单/支付严 (售后容易薅羊毛, 物流容易虚假签收)
+    # 找不到 event_type 时 fallback 到全局阈值
+    RISK_EVENT_THRESHOLDS: dict[str, dict[str, int]] = {
+        "下单":     {"pass": 30, "mark": 60, "review": 80},   # 标准
+        "支付":     {"pass": 25, "mark": 55, "review": 75},   # 支付更严 (钱的事)
+        "售后申请":  {"pass": 40, "mark": 70, "review": 85},   # 售后更严 (薅羊毛)
+        "物流投诉":  {"pass": 35, "mark": 65, "review": 80},   # 物流偏严
+        "通用":     {"pass": 30, "mark": 60, "review": 80},   # = 全局默认
+    }
+
+    # ---- 风险等级 ↔ 分数 映射 (P4-L5 2026-08-10) ----
+    # 教学场景: 4 档等级 (低/中/高/极高) 对应 4 段分数区间
+    # 业务方调阈值不用动 schema, 改 config.py 即可
+    # 区间左闭右闭, 边界值属于上面那个等级 (高+1 算下一档)
+    # 一票否决 (极高) 区间独立, 防止 89 分跟 90 分的边界争议
+    RISK_LEVEL_SCORE_MAP: dict[str, tuple[int, int]] = {
+        "低":   (0, 29),     # 0-29 分
+        "中":   (30, 59),    # 30-59 分
+        "高":   (60, 84),    # 60-84 分
+        "极高": (85, 100),   # 85-100 分
+    }
+
+    def get_risk_level_by_score(self, score: int) -> str:
+        """根据分数反查风险等级 (前端下拉 + 后端校验)."""
+        for level, (low, high) in self.RISK_LEVEL_SCORE_MAP.items():
+            if low <= score <= high:
+                return level
+        # 越界兜底 (理论上不应发生, 因为分数范围 0-100)
+        return "极高" if score > 100 else "低"
+
+    def get_event_thresholds(self, event_type: str) -> dict[str, int]:
+        """按 event_type 查阈值, 找不到 fallback 到全局."""
+        return self.RISK_EVENT_THRESHOLDS.get(
+            event_type,
+            {"pass": self.RISK_PASS_THRESHOLD, "mark": self.RISK_MARK_THRESHOLD, "review": self.RISK_REVIEW_THRESHOLD},
+        )
 
     # ---- LLM 配置 (阿里云百炼) ----
     LLM_API_KEY: str = ""
