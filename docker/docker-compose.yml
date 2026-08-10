@@ -1,0 +1,100 @@
+# =============================================================================
+# AI_Risk docker-compose (P4-L3 + P4-L4 2026-08-08)
+# 位置: docker/docker-compose.yml
+# 一键启动: cd docker && docker compose up -d
+# 包含: MySQL 8.0 + FastAPI app + Nginx 反代
+#
+# 所有相对路径都是相对 docker/ 目录 (volumes 用 ../sql ../ssl 引用项目根)
+# 注: .env 文件由 init_db 默认 reset 模式 (--yes 跳过确认)
+# =============================================================================
+
+version: "3.9"
+
+services:
+  # ---- 1. MySQL 8.0 ----
+  mysql:
+    image: mysql:8.0
+    container_name: ai_risk_mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-123321}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-ecs}
+      TZ: Asia/Shanghai
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+      - --default-authentication-plugin=mysql_native_password
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      # 首次启动自动执行 init SQL (建表 + 30 规则)
+      - ../sql/init_all.sql:/docker-entrypoint-initdb.d/01_init_all.sql:ro
+      # 增量 migration (老环境用, 新装可注释)
+      - ../sql/migration_add_2026_08_07_fields.sql:/docker-entrypoint-initdb.d/02_migration.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${MYSQL_ROOT_PASSWORD:-123321}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ---- 2. FastAPI app (gunicorn + uvicorn worker) ----
+  app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile     # Dockerfile 在 docker/ 子目录
+    container_name: ai_risk_app
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: root
+      DB_PASSWORD: ${MYSQL_ROOT_PASSWORD:-123321}
+      DB_NAME: ${MYSQL_DATABASE:-ecs}
+      # 阿里云百炼 LLM (生产填真实 key)
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://dashscope.aliyuncs.com/compatible-mode/v1}
+      LLM_MODEL_NAME: ${LLM_MODEL_NAME:-qwen-plus}
+      # 调度器配置 (P4-L3)
+      CASE_TIMEOUT_HOURS: ${CASE_TIMEOUT_HOURS:-24}
+      ALERT_SCHEDULER_INTERVAL_MIN: ${ALERT_SCHEDULER_INTERVAL_MIN:-15}
+      # 告警阈值
+      ALERT_PENDING_CASE_THRESHOLD: ${ALERT_PENDING_CASE_THRESHOLD:-50}
+      ALERT_CHECK_WINDOW_HOURS: ${ALERT_CHECK_WINDOW_HOURS:-1}
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    volumes:
+      # 挂载 logs 目录 (方便主机看)
+      - app_logs:/app/logs
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/docs').read()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # ---- 3. Nginx 反向代理 + 静态文件 (可选, 生产才用) ----
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: ai_risk_nginx
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      # SSL 证书 (生产挂载, 开发用 HTTP 即可)
+      # - ./ssl:/etc/nginx/ssl:ro
+    # 仅在需要 HTTPS 时启用 (需先创建 ./ssl/fullchain.pem 和 privkey.pem)
+    # command: ["nginx", "-g", "daemon off;"]
+
+volumes:
+  mysql_data:
+    name: ai_risk_mysql_data
+  app_logs:
+    name: ai_risk_app_logs

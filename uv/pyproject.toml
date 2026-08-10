@@ -1,0 +1,83 @@
+[project]
+name = "ai-risk"
+version = "2.0.0"
+description = "电商风控系统 - 规则引擎 + XGBoost 双轨融合 + AI Agent (教学项目)"
+authors = [
+    { name = "Mavis", email = "dev@example.com" },
+]
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
+license = { text = "MIT" }
+# 主依赖 (跟 requirements.txt 保持一致, 教学项目用宽松版本范围)
+dependencies = [
+    # Web 框架
+    "fastapi>=0.115.0,<0.116.0",
+    "uvicorn[standard]>=0.34.0,<0.35.0",
+    "gunicorn>=23.0.0,<24.0.0",
+    "pydantic>=2.10.0,<2.11.0",
+    "pydantic-settings>=2.7.0,<2.8.0",
+    "python-multipart>=0.0.18",
+    "jinja2>=3.1.0,<4.0.0",
+    # 数据库
+    "sqlalchemy>=2.0.0,<2.1.0",
+    "pymysql>=1.1.0,<1.2.0",
+    "aiomysql>=0.2.0,<0.3.0",
+    "cryptography>=44.0.0",
+    # 数据处理 / XGBoost
+    "pandas>=2.2.0,<2.3.0",
+    "numpy>=1.26.0,<3.0.0",        # numpy 2.x 跟 pandas 2.2.x 有兼容问题, 允许 1.26+
+    "scikit-learn>=1.5.0,<1.6.0",
+    "xgboost>=2.0.0,<3.0.0",
+    # AI Agent
+    "deepagents>=0.5.0,<0.6.0",
+    "langchain>=1.2.0,<1.3.0",
+    "langchain-core>=1.4.0,<1.5.0",
+    "langchain-openai>=1.1.0,<1.2.0",
+    "langgraph>=1.1.0,<1.2.0",
+    # 工具
+    "python-dotenv>=1.0.0,<2.0.0",
+    "ulid-py>=1.1.0,<1.2.0",
+    "faker>=33.0.0,<34.0.0",
+]
+
+[project.optional-dependencies]
+# 测试依赖 (跟 requirements.txt 里的测试组一致)
+test = [
+    "pytest>=8.3.0,<8.4.0",
+    "pytest-asyncio>=0.25.0,<0.26.0",
+    "httpx>=0.28.0,<0.29.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app", "scripts"]
+
+# ============================================================
+# uv 工具配置 (P4-L4 2026-08-08)
+# ============================================================
+
+[tool.uv]
+# 用 uv 管理虚拟环境
+# dev-dependencies 已废弃 (uv 0.5+), 改用 [dependency-groups]
+
+# 锁定的精确版本 (用 `uv lock` 生成 uv.lock)
+# 跟 uv/requirements-uv.txt 是同一份信息的两种格式
+
+[dependency-groups]
+# 开发依赖 (pytest 等) - uv 0.5+ 推荐写法
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.25.0",
+    "httpx>=0.28.0",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "strict"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]

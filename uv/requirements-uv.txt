@@ -1,0 +1,48 @@
+﻿# uv 锁定的精确依赖版本 (P4-L4 2026-08-08)
+# 由 requirements.txt 同步生成, 跨环境一致, 可用 uv pip install -r 部署
+#
+# 跟 requirements.txt 的关系:
+#   - requirements.txt = 宽松版本范围 (教学/默认用, pip install -r 直接装)
+#   - requirements-uv.txt = 精确版本 (生产/CI 用, 跟 uv.lock 一致)
+#
+# 用法 (详见 uv/README.md):
+#   uv venv .venv
+#   uv pip install -r uv/requirements-uv.txt
+
+# Web 框架
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+gunicorn==23.0.0
+pydantic==2.10.3
+pydantic-settings==2.7.0
+python-multipart==0.0.18
+jinja2==3.1.4
+
+# 数据库
+sqlalchemy==2.0.36
+pymysql==1.1.1
+aiomysql==0.2.0
+cryptography==44.0.0
+
+# 数据处理 / XGBoost
+pandas==2.2.3
+numpy==2.2.0
+scikit-learn==1.5.1
+xgboost==2.0.3
+
+# AI Agent
+deepagents==0.5.2
+langchain==1.2.15
+langchain-core==1.4.8
+langchain-openai==1.1.12
+langgraph==1.1.6
+
+# 测试
+pytest==8.3.4
+pytest-asyncio==0.25.0
+httpx==0.28.1
+
+# 工具
+python-dotenv==1.0.1
+ulid-py==1.1.0
+faker==33.1.0

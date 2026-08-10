@@ -1,0 +1,67 @@
+# Docker 忽略 (减少镜像体积, 加速构建)
+# 位置: docker/.dockerignore
+# 注: build context 是项目根, 排除不需要打入镜像的文件
+# 参考: https://docs.docker.com/engine/reference/builder/#dockerignore-file-format
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+.tox/
+
+# 虚拟环境
+venv/
+env/
+.venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# 测试 (镜像里不需要, 部署后再跑)
+tests/
+
+# 文档 (镜像里不需要, 留 README 即可)
+docs/
+2.资料/
+*.md
+!README.md
+
+# 日志
+*.log
+logs/
+
+# uv / docker 自身的元数据 (不需要打进镜像)
+uv/
+docker/
+
+# 测试数据 / 临时
+.env.local
+.env.*.local
+*.bak
+*.tmp
+
+# Git
+.git/
+.gitignore
+
+# 杂项
+.DS_Store
+Thumbs.db
+
+# 构建产物
+build/
+dist/
+*.egg
