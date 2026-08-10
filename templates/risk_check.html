@@ -113,9 +113,13 @@ document.getElementById('checkForm').addEventListener('submit', async function(e
             document.getElementById('resultContent').innerHTML = `<div class="alert alert-danger">${result.detail || '检查失败'}</div>`;
         } else {
             const decisionColor = {'通过':'success','标记':'warning','人工审核':'info','拒绝':'danger'}[result.decision] || 'secondary';
+            // 【P4-L5 2026-08-10】撞黑短路场景: assessment_id 以 blacklist_reject 开头,
+            // 不走 7 步决策, ml_score=null. 单独渲染"撞黑提示"块, 不显示"未加载模型"误导用户.
+            const isBlacklistReject = result.assessment_id === 'blacklist_reject';
             document.getElementById('resultContent').innerHTML = `
                 <div class="alert alert-${decisionColor} mb-3">
                     <strong>决策: ${result.decision}</strong> | 评分: <strong>${result.final_score}</strong> | 等级: ${riskBadge(result.risk_level)}
+                    ${result.message ? `<div class="mt-1 small">${result.message}</div>` : ''}
                 </div>
                 <div class="row mb-3">
                     <div class="col-md-6">
@@ -125,6 +129,12 @@ document.getElementById('checkForm').addEventListener('submit', async function(e
                         <small class="text-muted">命中规则数</small><br><strong>${result.rule_count}</strong>
                     </div>
                 </div>
+                ${isBlacklistReject ? `
+                <div class="alert alert-warning mb-3">
+                    <strong>🚫 撞黑名单短路</strong>
+                    <p class="mb-1 small">此请求撞了黑名单, 未走 7 步决策流水线 (不计算特征 / 不匹配规则 / 不调 XGBoost).</p>
+                    <p class="mb-0 small">如需解封, 请到 <a href="/blacklist">黑名单管理</a> 移除对应记录.</p>
+                </div>` : `
                 ${result.triggered_rules.length > 0 ? `
                 <h6 class="mt-3">命中规则</h6>
                 <table class="table table-sm">
@@ -149,7 +159,7 @@ document.getElementById('checkForm').addEventListener('submit', async function(e
                 <details class="mt-3">
                     <summary class="text-muted">特征详情</summary>
                     <pre class="mt-2 bg-light p-2 rounded" style="max-height:300px;overflow:auto;">${JSON.stringify(result.features, null, 2)}</pre>
-                </details>
+                </details>`}
             `;
         }
         document.getElementById('resultPanel').style.display = 'block';
