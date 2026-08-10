@@ -223,16 +223,14 @@ function showCreateModal() {
     document.getElementById('ruleModalTitle').textContent = '新建规则';
     document.getElementById('ruleForm').reset();
     document.getElementById('f_rule_id').disabled = false;
-    // 初始化可视化构建器: 1 个 AND 分组, 默认 3 个空条件框
-    // [P4-L5 2026-08-10] 用户开 modal 直接看到 3 个空条件, 不用先点 + 条件
+    // 初始化可视化构建器: 1 个 AND 分组, 默认 1 个空条件框
+    // [P4-L5 2026-08-11] 用户改主意: 默认只 1 个空条件, + 条件按钮加 1 行, 更干净
     // [P4-L5 2026-08-10 修复] 双保险: 立即调一次 (setTimeout 0) + shown.bs.modal 兜底
     // 立即调一次处理"modal 复用"场景 (Bootstrap 不会重发 shown), shown 事件处理"首次 show".
     // 第二次 buildConditionUI 幂等 (替换 innerHTML).
     const modalEl = document.getElementById('ruleModal');
     const initialCond = {
         and: [
-            {field: 'user_total_orders', op: '>=', value: 0},
-            {field: 'user_total_orders', op: '>=', value: 0},
             {field: 'user_total_orders', op: '>=', value: 0},
         ],
     };

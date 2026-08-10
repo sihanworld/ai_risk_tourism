@@ -245,6 +245,9 @@ function buildConditionUI(cond, containerId) {
     if (!c) { console.error('buildConditionUI: container not found', containerId); return; }
     c.innerHTML = '';
     if (!cond || typeof cond !== 'object') cond = {and: []};
+    // [P4-L5 2026-08-11] 把当前条件树存到 window 全局, 删 leaf/group 时能直接 splice
+    // (不再依赖 collectCondition + 字段匹配, 复杂且不准)
+    window._CURRENT_COND = cond;
     try {
         renderCondNode(cond, c, true);
         // [P4-L5 2026-08-10 调试] render 完再 console 一行
@@ -284,10 +287,20 @@ function renderCondNode(cond, parent, isRoot) {
             }
         });
         // 删分组
+        // [P4-L5 2026-08-11] 根 AND 不允许直接"删分组" (没意义, 整个 modal 重置即可);
+        // 子 group 删时通过 removeCondFromTree 同步从父 children 数组里 splice,
+        // 然后 buildConditionUI 整体重渲, UI/数据 100% 同步.
         head.querySelector('.cond-del-group').addEventListener('click', () => {
-            // 把这个分组替换成 [] (空 and), 父级需要重新渲染
-            // 简化: 直接移除
-            wrap.remove();
+            if (isRoot) {
+                alert('根 AND 分组不能删除. 关闭 modal 重新打开即可重置');
+                return;
+            }
+            const removed = removeCondFromTree(window._CURRENT_COND, cond);
+            if (removed) {
+                buildConditionUI(window._CURRENT_COND, 'condBuilder');
+            } else {
+                wrap.remove();
+            }
         });
         wrap.appendChild(head);
 
@@ -299,24 +312,26 @@ function renderCondNode(cond, parent, isRoot) {
         wrap.appendChild(childBox);
 
         // 底部: +条件 / +分组 按钮
-        // [P4-L5 2026-08-10] + 条件一次加 3 个空条件框 (用户填完删, 不用一次一次点),
-        // 减少点击次数. 不填的留空也行, saveRule 跳过空 op='' 的 leaf.
+        // [P4-L5 2026-08-11] + 条件一次加 1 行 (用户偏好, 默认 1 个 + 手动加更干净)
+        // [P4-L5 2026-08-10] + 分组默认带 1 个 AND 子组 (嵌套场景), 用户可继续往里加
         const footer = document.createElement('div');
         footer.className = 'mt-2';
         footer.innerHTML = `
-            <button type="button" class="btn btn-sm btn-outline-primary me-1 cond-add-leaf">+ 条件 (一次 3 个)</button>
+            <button type="button" class="btn btn-sm btn-outline-primary me-1 cond-add-leaf">+ 条件</button>
             <button type="button" class="btn btn-sm btn-outline-secondary cond-add-group">+ 分组 (${op === 'and' ? 'AND' : 'OR'})</button>
         `;
         footer.querySelector('.cond-add-leaf').addEventListener('click', () => {
-            for (let i = 0; i < 3; i++) {
-                children.push({field: 'user_total_orders', op: '>=', value: 0});
-            }
-            buildConditionUI(collectCondition(parent), parent.id);
+            // [P4-L5 2026-08-11] 一次加 1 行, 不再批量 3 个
+            // [P4-L5 2026-08-11] children 数组 = 当前 cond 的 and/or, push 完整体重渲
+            // 用 window._CURRENT_COND (根) 重渲, parent.id 在子级是 undefined
+            children.push({field: 'user_total_orders', op: '>=', value: 0});
+            buildConditionUI(window._CURRENT_COND, 'condBuilder');
         });
         footer.querySelector('.cond-add-group').addEventListener('click', () => {
             // [P4-L5 2026-08-10] + 分组默认带 1 个 AND 子组 (嵌套场景), 用户可继续往里加
+            // [P4-L5 2026-08-11] 整体重渲同 leaf
             children.push({and: [{field: 'user_total_orders', op: '>=', value: 0}]});
-            buildConditionUI(collectCondition(parent), parent.id);
+            buildConditionUI(window._CURRENT_COND, 'condBuilder');
         });
         wrap.appendChild(footer);
 
@@ -376,11 +391,38 @@ function renderCondNode(cond, parent, isRoot) {
         delBtn.type = 'button';
         delBtn.className = 'btn btn-sm btn-outline-danger cond-del-leaf';
         delBtn.textContent = '×';
-        delBtn.addEventListener('click', () => row.remove());
+        // [P4-L5 2026-08-11] 删 leaf: 从 window._CURRENT_COND 树里递归 splice 这个 cond
+        // 引用一致 (buildConditionUI 存的是同一个 cond 对象), 直接拿父 group 的 children 数组
+        delBtn.addEventListener('click', () => {
+            const root = document.getElementById('condBuilder');
+            if (!root) { row.remove(); return; }
+            const removed = removeCondFromTree(window._CURRENT_COND, cond);
+            if (removed) {
+                buildConditionUI(window._CURRENT_COND, 'condBuilder');
+            } else {
+                row.remove();
+            }
+        });
         row.appendChild(delBtn);
 
         parent.appendChild(row);
     }
+}
+
+// [P4-L5 2026-08-11] 在 JSON 树里按对象引用找到并移除 cond (删 leaf/group 都用)
+function removeCondFromTree(node, target) {
+    if (!node || typeof node !== 'object') return false;
+    if (node.and) {
+        const idx = node.and.indexOf(target);
+        if (idx >= 0) { node.and.splice(idx, 1); return true; }
+        for (const c of node.and) if (removeCondFromTree(c, target)) return true;
+    }
+    if (node.or) {
+        const idx = node.or.indexOf(target);
+        if (idx >= 0) { node.or.splice(idx, 1); return true; }
+        for (const c of node.or) if (removeCondFromTree(c, target)) return true;
+    }
+    return false;
 }
 
 // 值输入框随 op 联动 (in/not_in 数组, between 区间, 其他单值)
