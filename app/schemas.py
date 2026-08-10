@@ -42,12 +42,17 @@ class RiskCheckResponse(BaseModel):
     triggered_rules: list[RuleHitInfo]
     features: dict[str, Any] = {}
     create_time: datetime
-    # XGBoost 评分: None = 模型未加载
+    # XGBoost 评分: None = 模型未加载 / 撞黑不走决策
     ml_score: Optional[float] = None
     ml_decision: Optional[str] = None
     # 【P1-S9】被哪种黑名单撞了: None=没撞黑, "用户"/"地址"/"手机号" 三选一.
     # 撞黑时 decision="拒绝" 但不走 7 步决策, 用此字段区分"业务拒绝" vs "黑名单拒绝"
     blocked_by: Optional[str] = None
+    # 【P4-L5 2026-08-10】人类可读的拒绝原因 (前端直接显示, 避免 UI 看不懂 ml_score=null)
+    # - 撞黑场景: "撞黑名单: 用户" / "撞黑名单: 地址" / "撞黑名单: 手机号"
+    # - 业务规则拒绝: 一票否决规则名 (如 "触发 R002 单笔 10000+")
+    # - 通过/标记: "正常放行" / "标记观察"
+    message: Optional[str] = None
 
 
 # ============================================================
