@@ -247,6 +247,8 @@ function buildConditionUI(cond, containerId) {
     if (!cond || typeof cond !== 'object') cond = {and: []};
     try {
         renderCondNode(cond, c, true);
+        // [P4-L5 2026-08-10 调试] render 完再 console 一行
+        console.log('[buildConditionUI] OK, children=', c.children.length);
     } catch (e) {
         console.error('renderCondNode throw', e, 'cond=', cond);
         c.innerHTML = '<pre style="color:red;font-size:11px;">' + (e && e.message || e) + '\n\n' + (e && e.stack || '') + '</pre>';
@@ -297,33 +299,45 @@ function renderCondNode(cond, parent, isRoot) {
         wrap.appendChild(childBox);
 
         // 底部: +条件 / +分组 按钮
+        // [P4-L5 2026-08-10] + 条件一次加 3 个空条件框 (用户填完删, 不用一次一次点),
+        // 减少点击次数. 不填的留空也行, saveRule 跳过空 op='' 的 leaf.
         const footer = document.createElement('div');
         footer.className = 'mt-2';
         footer.innerHTML = `
-            <button type="button" class="btn btn-sm btn-outline-primary me-1 cond-add-leaf">+ 条件</button>
+            <button type="button" class="btn btn-sm btn-outline-primary me-1 cond-add-leaf">+ 条件 (一次 3 个)</button>
             <button type="button" class="btn btn-sm btn-outline-secondary cond-add-group">+ 分组 (${op === 'and' ? 'AND' : 'OR'})</button>
         `;
         footer.querySelector('.cond-add-leaf').addEventListener('click', () => {
-            children.push({field: 'user_total_orders', op: '>=', value: 0});
+            for (let i = 0; i < 3; i++) {
+                children.push({field: 'user_total_orders', op: '>=', value: 0});
+            }
             buildConditionUI(collectCondition(parent), parent.id);
         });
         footer.querySelector('.cond-add-group').addEventListener('click', () => {
-            children.push({and: []});
+            // [P4-L5 2026-08-10] + 分组默认带 1 个 AND 子组 (嵌套场景), 用户可继续往里加
+            children.push({and: [{field: 'user_total_orders', op: '>=', value: 0}]});
             buildConditionUI(collectCondition(parent), parent.id);
         });
         wrap.appendChild(footer);
 
         parent.appendChild(wrap);
     } else {
-        // 单条件
+        // [P4-L5 2026-08-10] 单条件改用 CSS Grid 4 列布局, 不再 d-flex, 解决:
+        //   1) 窄 modal 下 op 下拉被压窄 (160px minWidth 在 d-flex 不够稳)
+        //   2) value 框被挤看不到完整 placeholder
+        //   3) 移动端/小屏下 4 个控件挤一行难看
+        // 4 列: 字段(2fr) / op(1fr) / value(2fr) / 操作(60px), value 列宽固定不缩
         const row = document.createElement('div');
-        row.className = 'cond-leaf d-flex align-items-center mb-2 p-2 border rounded';
+        row.className = 'cond-leaf mb-2 p-2 border rounded';
         row.style.background = '#f9fafb';
+        row.style.display = 'grid';
+        row.style.gridTemplateColumns = 'minmax(220px, 2fr) minmax(140px, 1fr) minmax(220px, 2fr) 60px';
+        row.style.gap = '8px';
+        row.style.alignItems = 'center';
 
         // 字段下拉 (中文标签)
         const fieldSel = document.createElement('select');
-        fieldSel.className = 'form-select form-select-sm me-1 cond-field';
-        fieldSel.style.minWidth = '180px';
+        fieldSel.className = 'form-select form-select-sm cond-field';
         Object.entries(FEATURE_LABELS).forEach(([key, label]) => {
             const opt = document.createElement('option');
             opt.value = key;
@@ -335,8 +349,7 @@ function renderCondNode(cond, parent, isRoot) {
 
         // 运算符下拉
         const opSel = document.createElement('select');
-        opSel.className = 'form-select form-select-sm me-1 cond-op';
-        opSel.style.minWidth = '160px';
+        opSel.className = 'form-select form-select-sm cond-op';
         OPERATORS.forEach(({value, label}) => {
             const opt = document.createElement('option');
             opt.value = value;
@@ -352,8 +365,7 @@ function renderCondNode(cond, parent, isRoot) {
 
         // 值输入 (随 op 联动)
         const valBox = document.createElement('div');
-        valBox.className = 'cond-val-box me-1';
-        valBox.style.flex = '1';
+        valBox.className = 'cond-val-box';
         row.appendChild(fieldSel);
         row.appendChild(opSel);
         row.appendChild(valBox);
@@ -362,7 +374,7 @@ function renderCondNode(cond, parent, isRoot) {
         // 删除
         const delBtn = document.createElement('button');
         delBtn.type = 'button';
-        delBtn.className = 'btn btn-sm btn-outline-danger ms-1 cond-del-leaf';
+        delBtn.className = 'btn btn-sm btn-outline-danger cond-del-leaf';
         delBtn.textContent = '×';
         delBtn.addEventListener('click', () => row.remove());
         row.appendChild(delBtn);
@@ -432,6 +444,25 @@ function collectCondition(container) {
     const root = container.children[0];
     if (!root) return {and: []};
     return extractNode(root);
+}
+
+// [P4-L5 2026-08-10] 递归去掉未填的 leaf (op === '' 表示用户没改这个占位条件),
+// 防止默认 3 个空条件框被原样存进数据库. 保留有内容的 leaf 和 group 结构.
+function stripEmptyLeaves(node) {
+    if (!node || typeof node !== 'object') return node;
+    if (node.and) {
+        const children = (node.and || []).map(stripEmptyLeaves).filter(c => c !== null);
+        return children.length > 0 ? {and: children} : null;
+    }
+    if (node.or) {
+        const children = (node.or || []).map(stripEmptyLeaves).filter(c => c !== null);
+        return children.length > 0 ? {or: children} : null;
+    }
+    // leaf: op === '' 视为未填, 去掉
+    if (node.op === '' || node.op === undefined || node.op === null) {
+        return null;
+    }
+    return node;
 }
 
 function extractNode(node) {

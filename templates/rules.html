@@ -48,7 +48,9 @@
 
 <!-- 创建/编辑模态框 -->
 <div class="modal fade" id="ruleModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
+    <!-- [P4-L5 2026-08-10] modal-xl 1140px + modal-dialog-scrollable, 给条件构建器更宽的画布,
+         避免 op / value 框被挤窄 -->
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
                     <h5 class="modal-title" id="ruleModalTitle">新建规则</h5>
@@ -221,18 +223,32 @@ function showCreateModal() {
     document.getElementById('ruleModalTitle').textContent = '新建规则';
     document.getElementById('ruleForm').reset();
     document.getElementById('f_rule_id').disabled = false;
-    // 初始化可视化构建器: 1 个空 AND 分组
-    // [P4-L5 2026-08-10 修复] 放到 shown.bs.modal 之后调, 避开 Bootstrap 5 首次 show
-    // 时的样式重排 / focus trap 干扰, 否则第一次开 modal 时 buildConditionUI 内部
-    // <select>/<input> 插入到 DOM 过程中被 Bootstrap 内部脚本 throw, 导致 condBuilder 空.
-    // 第二次开 modal 状态稳定了才不 throw (用户体感: 第一次开空白, 第二次开才看到).
+    // 初始化可视化构建器: 1 个 AND 分组, 默认 3 个空条件框
+    // [P4-L5 2026-08-10] 用户开 modal 直接看到 3 个空条件, 不用先点 + 条件
+    // [P4-L5 2026-08-10 修复] 双保险: 立即调一次 (setTimeout 0) + shown.bs.modal 兜底
+    // 立即调一次处理"modal 复用"场景 (Bootstrap 不会重发 shown), shown 事件处理"首次 show".
+    // 第二次 buildConditionUI 幂等 (替换 innerHTML).
     const modalEl = document.getElementById('ruleModal');
+    const initialCond = {
+        and: [
+            {field: 'user_total_orders', op: '>=', value: 0},
+            {field: 'user_total_orders', op: '>=', value: 0},
+            {field: 'user_total_orders', op: '>=', value: 0},
+        ],
+    };
     const onShown = () => {
-        buildConditionUI({and: [{field: 'user_total_orders', op: '>=', value: 0}]}, 'condBuilder');
+        buildConditionUI(initialCond, 'condBuilder');
         modalEl.removeEventListener('shown.bs.modal', onShown);
     };
     modalEl.addEventListener('shown.bs.modal', onShown);
     new bootstrap.Modal(modalEl).show();
+    // 兜底: setTimeout(0) 让 show() 同步初始化走完再调
+    setTimeout(() => {
+        // 如果 shown.bs.modal 没触发 (modal 已存在), 手动调一次
+        if (!document.querySelector('#condBuilder .cond-group, #condBuilder .cond-leaf')) {
+            buildConditionUI(initialCond, 'condBuilder');
+        }
+    }, 50);
 }
 
 async function editRule(ruleId) {
@@ -252,6 +268,7 @@ async function editRule(ruleId) {
     document.getElementById('f_priority').value = r.priority;
     document.getElementById('f_description').value = r.description || '';
     // [P4-L5 2026-08-10 修复] 跟 showCreateModal 一样, buildConditionUI 放到 shown 之后
+    // 同样双保险: shown 回调 + setTimeout 兜底
     const modalEl = document.getElementById('ruleModal');
     const onShown = () => {
         buildConditionUI(r.rule_condition, 'condBuilder');
@@ -259,12 +276,19 @@ async function editRule(ruleId) {
     };
     modalEl.addEventListener('shown.bs.modal', onShown);
     new bootstrap.Modal(modalEl).show();
+    setTimeout(() => {
+        if (!document.querySelector('#condBuilder .cond-group, #condBuilder .cond-leaf')) {
+            buildConditionUI(r.rule_condition, 'condBuilder');
+        }
+    }, 50);
 }
 
 async function saveRule() {
     // 【P4-L5 2026-08-10】从可视化构建器收集 JSON, 替代 JSON.parse(textarea)
+    // [P4-L5 2026-08-10] 默认 3 个空 leaf, saveRule 时跳过 op='' (占位, 未填) 的 leaf,
+    // 否则空 placeholder 也被存进数据库, 跟用户实际意图不符
     const condBuilder = document.getElementById('condBuilder');
-    const condition = collectCondition(condBuilder);
+    const condition = stripEmptyLeaves(collectCondition(condBuilder));
     // 同步到隐藏 textarea (留作 fallback / 调试)
     document.getElementById('f_condition').value = JSON.stringify(condition, null, 2);
 
