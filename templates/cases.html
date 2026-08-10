@@ -1,0 +1,265 @@
+{% extends "base.html" %}
+{% block title %}案件管理 - 电商风控系统{% endblock %}
+{% block content %}
+<h4 class="mb-4">案件管理</h4>
+
+<!-- 统计卡片 -->
+<div class="row mb-4" id="case-stats">
+    <div class="col-md-2"><div class="card stat-card p-2 text-center"><div class="text-muted small">总计</div><div class="fw-bold" id="cs-total">-</div></div></div>
+    <div class="col-md-2"><div class="card stat-card p-2 text-center"><div class="text-muted small">待审核</div><div class="fw-bold text-warning" id="cs-pending">-</div></div></div>
+    <div class="col-md-2"><div class="card stat-card p-2 text-center"><div class="text-muted small">审核中</div><div class="fw-bold text-info" id="cs-reviewing">-</div></div></div>
+    <div class="col-md-2"><div class="card stat-card p-2 text-center"><div class="text-muted small">已通过</div><div class="fw-bold text-success" id="cs-approved">-</div></div></div>
+    <div class="col-md-2"><div class="card stat-card p-2 text-center"><div class="text-muted small">已拒绝</div><div class="fw-bold text-danger" id="cs-rejected">-</div></div></div>
+    <div class="col-md-2"><div class="card stat-card p-2 text-center"><div class="text-muted small">已关闭</div><div class="fw-bold text-secondary" id="cs-closed">-</div></div></div>
+</div>
+
+<!-- 筛选 -->
+<div class="mb-3 d-flex gap-2 align-items-center flex-wrap">
+    <select class="form-select form-select-sm w-auto" id="filterStatus" onchange="loadCases()">
+        <option value="__active__" selected>仅待办 (待审核 + 审核中)</option>
+        <option value="">全部状态</option>
+        <option value="待审核">待审核</option>
+        <option value="审核中">审核中</option>
+        <option value="已通过">已通过</option>
+        <option value="已拒绝">已拒绝</option>
+        <option value="已关闭">已关闭</option>
+    </select>
+    <span class="text-muted small">每页</span>
+    <select class="form-select form-select-sm w-auto" id="pageSize" onchange="onPageSizeChange()">
+        <option value="20">20 条</option>
+        <option value="50">50 条</option>
+        <option value="100">100 条</option>
+    </select>
+    <span class="text-muted small ms-2" id="casesCount"></span>
+</div>
+
+<!-- 案件列表 -->
+<div class="card stat-card">
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead class="table-light">
+                <tr><th>案件ID</th><th>用户ID</th><th>分类</th><th>评分</th><th>等级</th><th>状态</th><th>创建时间</th><th>操作</th></tr>
+            </thead>
+            <tbody id="cases-table"></tbody>
+        </table>
+    </div>
+</div>
+
+<!-- 案件操作说明 -->
+<style>
+/* 案件列表操作列: 详情 + 重做检查 */
+.col-actions .btn { margin-right: 4px; }
+</style>
+
+<nav class="pagination-bottom"><ul class="pagination justify-content-center mb-0" id="pagination"></ul></nav>
+
+<!-- 案件详情模态框 -->
+<div class="modal fade" id="caseModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header"><h5 class="modal-title">案件详情</h5><button type="button" class="btn-close-risk" data-bs-dismiss="modal" title="关闭" aria-label="Close"><i class="bi bi-x-lg"></i></button></div>
+            <div class="modal-body" id="caseDetailBody">加载中...</div>
+            <div class="modal-footer" id="caseActions"></div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentPage = 1;
+const PAGE_SIZE_KEY = 'cases_pageSize';
+
+// 从 localStorage 恢复 pageSize, 默认 20
+(function initPageSize() {
+    const saved = localStorage.getItem(PAGE_SIZE_KEY) || '20';
+    document.getElementById('pageSize').value = saved;
+})();
+
+// 用户切换 pageSize 时保存到 localStorage
+function onPageSizeChange() {
+    localStorage.setItem(PAGE_SIZE_KEY, document.getElementById('pageSize').value);
+    loadCases(1);
+}
+
+function riskBadge(level) {
+    const cls = {'低':'badge-risk-low','中':'badge-risk-mid','高':'badge-risk-high','极高':'badge-risk-critical'}[level] || 'bg-secondary';
+    return `<span class="badge ${cls}">${level}</span>`;
+}
+
+function statusBadge(status) {
+    const cls = {'待审核':'bg-warning','审核中':'bg-info','已通过':'bg-success','已拒绝':'bg-danger','已关闭':'bg-secondary'}[status] || 'bg-secondary';
+    return `<span class="badge ${cls}">${status}</span>`;
+}
+
+async function loadStats() {
+    const res = await fetch('/api/cases/statistics');
+    const s = await res.json();
+    document.getElementById('cs-total').textContent = s.total;
+    document.getElementById('cs-pending').textContent = s.pending;
+    document.getElementById('cs-reviewing').textContent = s.reviewing;
+    document.getElementById('cs-approved').textContent = s.approved;
+    document.getElementById('cs-rejected').textContent = s.rejected;
+    document.getElementById('cs-closed').textContent = s.closed;
+}
+
+async function loadCases(page) {
+    currentPage = page || 1;
+    const status = document.getElementById('filterStatus').value;
+    const pageSize = document.getElementById('pageSize').value;
+    let url = `/api/cases?page=${currentPage}&page_size=${pageSize}`;
+    if (status === '__active__') {
+        url += '&active_only=true';
+    } else if (status) {
+        url += `&status=${encodeURIComponent(status)}`;
+    }
+    const res = await fetch(url);
+    const data = await res.json();
+    document.getElementById('casesCount').textContent =
+        `共 ${data.total} 条, 当前 ${data.items.length} 条/页`;
+    const tbody = document.getElementById('cases-table');
+    if (data.items.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">暂无案件</td></tr>';
+    } else {
+        tbody.innerHTML = data.items.map(c => `
+            <tr>
+                <td><code>${c.case_id.substring(0,16)}...</code></td>
+                <td>${c.user_id}</td>
+                <td>${c.case_category || '-'}</td>
+                <td><strong>${c.final_score ?? '-'}</strong></td>
+                <td>${riskBadge(c.risk_level || '低')}</td>
+                <td>${statusBadge(c.case_status)}</td>
+                <td>${c.create_time ? new Date(c.create_time).toLocaleString('zh-CN') : '-'}</td>
+                <td class="col-actions">
+                    <button class="btn btn-outline-primary btn-sm" onclick="viewCase('${c.case_id}')">详情</button>
+                    ${c.source_id ? `<button class="btn btn-outline-warning btn-sm"
+                        title="用 ${c.source_id} 重新执行风控检查"
+                        onclick="recheckCase('${c.case_id}','${c.source_id}','${c.user_id}','${c.event_type || '下单'}')">
+                        <i class="bi bi-arrow-repeat"></i> 重做检查
+                    </button>` : '<span class="text-muted small" title="老案件未记录业务ID, 需手动填写">无 source_id</span>'}
+                </td>
+            </tr>
+        `).join('');
+    }
+    // 分页 (P4-L4 2026-08-08 通用分页组件)
+    const totalPages = Math.ceil(data.total / pageSize);
+    document.getElementById('pagination').innerHTML =
+        buildPaginationHtml(currentPage, totalPages, pageSize, 'loadCases');
+}
+
+async function viewCase(caseId) {
+    const res = await fetch(`/api/cases/${caseId}`);
+    const c = await res.json();
+    const body = document.getElementById('caseDetailBody');
+    body.innerHTML = `
+        <div class="row">
+            <div class="col-md-6">
+                <h6>基本信息</h6>
+                <table class="table table-sm">
+                    <tr><td class="text-muted">案件ID</td><td>${c.case_id}</td></tr>
+                    <tr><td class="text-muted">用户ID</td><td>${c.user_id}</td></tr>
+                    <tr><td class="text-muted">评分</td><td><strong>${c.final_score ?? '-'}</strong></td></tr>
+                    <tr><td class="text-muted">等级</td><td>${riskBadge(c.risk_level || '低')}</td></tr>
+                    <tr><td class="text-muted">决策</td><td>${c.decision || '-'}</td></tr>
+                    <tr><td class="text-muted">状态</td><td>${statusBadge(c.case_status)}</td></tr>
+                    <tr><td class="text-muted">分类</td><td>${c.case_category || '-'}</td></tr>
+                    <tr><td class="text-muted">创建时间</td><td>${c.create_time ? new Date(c.create_time).toLocaleString('zh-CN') : '-'}</td></tr>
+                    ${c.reviewer ? `<tr><td class="text-muted">审核人</td><td>${c.reviewer}</td></tr>` : ''}
+                    ${c.review_comment ? `<tr><td class="text-muted">审核意见</td><td>${c.review_comment}</td></tr>` : ''}
+                </table>
+                <!-- 【P4-L4 2026-08-08】ML 评分 (XGBoost, sigmoid 校准) -->
+                <h6 class="mt-3">ML 评分 <small class="text-muted">(XGBoost)</small></h6>
+                <div class="ml-score-block p-2 bg-light rounded">
+                    ${c.ml_score != null
+                        ? renderMLScoreBlock(c.ml_score, c.ml_decision)
+                        : '<span class="text-muted">未加载模型</span>'}
+                </div>
+            </div>
+            <div class="col-md-6">
+                <h6>命中规则</h6>
+                ${c.triggered_rules.length > 0 ? `<table class="table table-sm">
+                    <thead><tr><th>规则</th><th>等级</th><th>分值</th></tr></thead>
+                    <tbody>${c.triggered_rules.map(r => `<tr><td>${r.rule_name}</td><td>${riskBadge(r.risk_level)}</td><td>${r.risk_score}</td></tr>`).join('')}</tbody>
+                </table>` : '<p class="text-muted">无命中规则</p>'}
+                ${c.user_profile ? `<h6 class="mt-3">用户画像</h6>
+                <table class="table table-sm">
+                    <tr><td class="text-muted">风险评分</td><td>${c.user_profile.risk_score}</td></tr>
+                    <tr><td class="text-muted">总订单</td><td>${c.user_profile.total_orders}</td></tr>
+                    <tr><td class="text-muted">退款率</td><td>${(c.user_profile.refund_rate * 100).toFixed(1)}%</td></tr>
+                    <tr><td class="text-muted">投诉次数</td><td>${c.user_profile.complaint_count}</td></tr>
+                </table>` : ''}
+            </div>
+        </div>
+        ${c.case_status === '待审核' ? `
+        <hr>
+        <h6>审核操作</h6>
+        <div class="row">
+            <div class="col-md-4">
+                <label class="form-label">审核人</label>
+                <input type="text" class="form-control" id="reviewer" value="admin">
+            </div>
+            <div class="col-md-8">
+                <label class="form-label">审核意见</label>
+                <input type="text" class="form-control" id="reviewComment">
+            </div>
+        </div>
+        <div class="mt-2">
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="checkbox" id="addBlacklist">
+                <label class="form-check-label" for="addBlacklist">拒绝时加入黑名单</label>
+            </div>
+        </div>` : ''}
+    `;
+
+    const actions = document.getElementById('caseActions');
+    if (c.case_status === '待审核') {
+        actions.innerHTML = `
+            <button class="btn btn-success" onclick="reviewCase('${c.case_id}','已通过')">通过</button>
+            <button class="btn btn-danger" onclick="reviewCase('${c.case_id}','已拒绝')">拒绝</button>
+            <button class="btn btn-secondary" onclick="reviewCase('${c.case_id}','已关闭')">关闭</button>
+        `;
+    } else {
+        actions.innerHTML = '<button class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>';
+    }
+    new bootstrap.Modal(document.getElementById('caseModal')).show();
+}
+
+async function reviewCase(caseId, decision) {
+    const data = {
+        decision: decision,
+        reviewer: document.getElementById('reviewer')?.value || 'admin',
+        review_comment: document.getElementById('reviewComment')?.value || '',
+        add_to_blacklist: document.getElementById('addBlacklist')?.checked || false,
+    };
+    const res = await fetch(`/api/cases/${caseId}/review`, {
+        method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data)
+    });
+    if (res.ok) {
+        bootstrap.Modal.getInstance(document.getElementById('caseModal')).hide();
+        loadCases(currentPage);
+        loadStats();
+    } else {
+        alert('审核失败');
+    }
+}
+
+// 重做检查: 把案件的 source_id / user_id / event_type 带到风控检查页
+function recheckCase(caseId, sourceId, userId, eventType) {
+    if (!sourceId) {
+        alert('该案件没有记录业务ID, 无法重做检查');
+        return;
+    }
+    sessionStorage.setItem('risk_check_prefill', JSON.stringify({
+        case_id: caseId,
+        event_type: eventType || '下单',
+        user_id: userId,
+        source_id: sourceId,
+    }));
+    window.location.href = '/risk-check';
+}
+
+loadStats();
+loadCases();
+</script>
+{% endblock %}

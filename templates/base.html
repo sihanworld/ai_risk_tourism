@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}电商风控系统{% endblock %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.2/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        /* P4-L4 2026-08-08 布局: 左侧 fixed 不动, 右侧独立滚动 */
+        html, body { height: 100%; margin: 0; }
+        body { background: #f0f2f5; overflow: hidden; }
+        /* 去掉 Bootstrap 默认 gutter, 让 main-content 精确占右侧 */
+        .container-fluid, .row { padding: 0 !important; margin: 0 !important; }
+        /* 左侧 sidebar 绝对定位, 不参与文档流 */
+        .sidebar {
+            position: fixed;
+            top: 0; left: 0; bottom: 0;
+            width: 16.66667%;   /* 等同 col-md-2 = 2/12 */
+            background: #1e293b;
+            overflow-y: auto;   /* 侧边栏内容多时自己滚 */
+            z-index: 1000;
+        }
+        .sidebar .nav-link { color: #94a3b8; padding: 12px 20px; border-radius: 8px; margin: 2px 8px; }
+        .sidebar .nav-link:hover, .sidebar .nav-link.active { color: #fff; background: #334155; }
+        .sidebar .nav-link i { margin-right: 10px; width: 20px; text-align: center; }
+        .sidebar-brand { color: #fff; font-size: 18px; font-weight: 700; padding: 20px; border-bottom: 1px solid #334155; }
+        /* 主内容区: 显式 margin-left 16.66667% 避开 fixed sidebar (否则被盖住) */
+        .main-content {
+            margin-left: 16.66667%;   /* 等同 col-md-2 = 2/12, 跟 sidebar 宽度对齐 */
+            height: 100vh;
+            overflow-y: auto;  /* ← 关键: 只有这里上下滚 */
+            padding: 24px;
+        }
+        /* 【P4-L4 2026-08-08 修复】分页栏粘在 main-content 底部, 滚动时一直可见.
+         * 之前问题: .main-content { height: 100vh; overflow-y: auto } 把分页栏推到
+         * 滚动到底才看得到, 用户没滚到底就以为没分页. 现在 sticky 固定在底部. */
+        /* 【P4-L4 第二轮 2026-08-08】紧凑版: min-height 60→38, padding 减半, 单字符按钮 */
+        .pagination-bottom {
+            position: sticky;
+            bottom: 0;
+            background: #ffffff;
+            padding: 6px 12px;
+            margin: 12px 0 0 0;
+            border-top: 1px solid #e5e7eb;
+            box-shadow: 0 -2px 6px rgba(0, 0, 0, 0.04);
+            z-index: 100;
+            min-height: 38px;
+        }
+        /* 显式分页按钮样式, 防 Bootstrap reset 覆盖导致文字看不见 */
+        .pagination-bottom .pagination {
+            margin: 0;
+            display: flex;
+            list-style: none;
+            gap: 3px;
+            justify-content: center;
+            align-items: center;
+        }
+        .pagination-bottom .page-item .page-link {
+            color: #0d6efd;
+            background: #ffffff;
+            border: 1px solid #dee2e6;
+            padding: 4px 10px;
+            font-size: 13px;
+            line-height: 1.4;
+            min-width: 32px;
+            height: 28px;
+            text-align: center;
+            border-radius: 3px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .pagination-bottom .page-item.active .page-link {
+            color: #ffffff;
+            background: #0d6efd;
+            border-color: #0d6efd;
+            font-weight: 600;
+        }
+        .pagination-bottom .page-item.disabled .page-link {
+            color: #adb5bd;
+            background: #f8f9fa;
+            cursor: not-allowed;
+        }
+        .pagination-bottom .page-item .page-link:hover:not(.disabled) {
+            background: #e7f1ff;
+            border-color: #0d6efd;
+        }
+        .stat-card { border: none; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+        .stat-card .stat-value { font-size: 28px; font-weight: 700; }
+        .badge-risk-low { background: #dcfce7; color: #166534; }
+        .badge-risk-mid { background: #fef9c3; color: #854d0e; }
+        .badge-risk-high { background: #fed7aa; color: #9a3412; }
+        .badge-risk-critical { background: #fecaca; color: #991b1b; }
+        .chat-messages { height: calc(100vh - 320px); min-height: 300px; max-height: calc(100vh - 160px); overflow-y: auto; }
+        .chat-bubble { max-width: 80%; padding: 10px 14px; border-radius: 12px; margin-bottom: 8px; }
+        .chat-bubble.user { background: #3b82f6; color: #fff; margin-left: auto; }
+        .chat-bubble.ai { background: #f1f5f9; color: #1e293b; }
+        /* 红色粗线条关闭按钮 */
+        .btn-close-risk {
+            background: transparent;
+            border: 2px solid #dc2626;
+            border-radius: 6px;
+            color: #dc2626;
+            width: 32px;
+            height: 32px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            font-weight: 900;
+            line-height: 1;
+            padding: 0;
+            transition: all 0.15s ease;
+        }
+        .btn-close-risk:hover {
+            background: #dc2626;
+            color: #fff;
+        }
+        .btn-close-risk:focus {
+            box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.25);
+            outline: none;
+        }
+        /* 响应式: 窄屏 (md 以下) 恢复 Bootstrap 默认流式布局 (横排) */
+        @media (max-width: 767.98px) {
+            body { overflow: auto; }
+            .sidebar {
+                position: relative;
+                width: 100%;
+                height: auto;
+                overflow-y: visible;
+            }
+            .main-content {
+                margin-left: 0;
+                height: auto;
+                overflow-y: visible;
+            }
+        }
+    </style>
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+<div class="container-fluid">
+    <div class="row">
+        <!-- 侧边栏 -->
+        <div class="col-md-2 sidebar px-0">
+            <div class="sidebar-brand">
+                <i class="bi bi-shield-check"></i> 风控中心
+            </div>
+            <nav class="nav flex-column mt-3">
+                <a class="nav-link {% if request.url.path == '/' %}active{% endif %}" href="/">
+                    <i class="bi bi-speedometer2"></i> 仪表盘
+                </a>
+                <a class="nav-link {% if request.url.path == '/rules' %}active{% endif %}" href="/rules">
+                    <i class="bi bi-list-check"></i> 规则管理
+                </a>
+                <a class="nav-link {% if request.url.path == '/cases' %}active{% endif %}" href="/cases">
+                    <i class="bi bi-folder2-open"></i> 案件管理
+                </a>
+                <a class="nav-link {% if request.url.path == '/assessments' %}active{% endif %}" href="/assessments">
+                    <i class="bi bi-clipboard-data"></i> 评估历史
+                </a>
+                <a class="nav-link {% if request.url.path == '/risk-check' %}active{% endif %}" href="/risk-check">
+                    <i class="bi bi-search"></i> 风险检查
+                </a>
+                <a class="nav-link {% if request.url.path == '/chat' %}active{% endif %}" href="/chat">
+                    <i class="bi bi-robot"></i> AI 助手
+                </a>
+                <a class="nav-link {% if request.url.path == '/blacklist' %}active{% endif %}" href="/blacklist">
+                    <i class="bi bi-shield-x"></i> 黑名单
+                </a>
+            </nav>
+        </div>
+        <!-- 主内容区 -->
+        <div class="col-md-10 main-content">
+            {% block content %}{% endblock %}
+        </div>
+    </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<!-- 改版加 ?v=YYYYMMDD[vN] 破 FastAPI StaticFiles 强缓存 (max-age=1y), 否则浏览器永远用旧版 -->
+<!-- 2026-08-08v4: 加 mlProbToRiskScore + renderMLScoreBlock, 风险检查/案件详情/评估历史 3 页面统一显示 sigmoid 校准值 -->
+<script src="/static/app.js?v=20260808v4"></script>
+{% block extra_js %}{% endblock %}
+</body>
+</html>

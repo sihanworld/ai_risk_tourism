@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}仪表盘 - 电商风控系统{% endblock %}
+{% block content %}
+<h4 class="mb-4">风控仪表盘</h4>
+
+<!-- 统计卡片 -->
+<div class="row mb-4" id="stat-cards">
+    <div class="col-md-3">
+        <div class="card stat-card p-3">
+            <div class="text-muted small">今日评估</div>
+            <div class="stat-value text-primary" id="total-today">-</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card p-3">
+            <div class="text-muted small">高风险</div>
+            <div class="stat-value text-danger" id="high-risk-today">-</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card p-3">
+            <div class="text-muted small">待审案件</div>
+            <div class="stat-value text-warning" id="pending-cases">-</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card p-3">
+            <div class="text-muted small">通过率</div>
+            <div class="stat-value text-success" id="pass-rate">-</div>
+        </div>
+    </div>
+</div>
+
+<!-- 图表 -->
+<div class="row">
+    <div class="col-md-8">
+        <div class="card stat-card p-3">
+            <h6>近7天评估趋势</h6>
+            <canvas id="trendChart" height="400"></canvas>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card stat-card p-3">
+            <h6>规则命中 TOP5</h6>
+            <ul class="list-group list-group-flush" id="top-rules">
+                <li class="list-group-item text-muted">加载中...</li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function loadDashboard() {
+    try {
+        const res = await fetch('/api/dashboard/overview');
+        const data = await res.json();
+
+        document.getElementById('total-today').textContent = data.today_assessments || 0;
+        document.getElementById('high-risk-today').textContent = data.today_high_risk || 0;
+        document.getElementById('pending-cases').textContent = data.pending_cases || 0;
+        document.getElementById('pass-rate').textContent = (data.pass_rate || 0) + '%';
+
+        // 趋势图
+        const trend = data.trend_7d || [];
+        const ctx = document.getElementById('trendChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: trend.map(t => t.date),
+                datasets: [
+                    { label: '总评估', data: trend.map(t => t.count), borderColor: '#3b82f6', tension: 0.3 },
+                    { label: '高风险', data: trend.map(t => t.high_risk_count), borderColor: '#ef4444', tension: 0.3 }
+                ]
+            },
+            options: { responsive: true, plugins: { legend: { position: 'top' } } }
+        });
+
+        // TOP5规则
+        const topRulesEl = document.getElementById('top-rules');
+        const topRules = data.top_rules || [];
+        if (topRules.length === 0) {
+            topRulesEl.innerHTML = '<li class="list-group-item text-muted">暂无数据</li>';
+        } else {
+            topRulesEl.innerHTML = topRules.map(r =>
+                `<li class="list-group-item d-flex justify-content-between">
+                    <span>${r.rule_name}</span>
+                    <span class="badge bg-primary">${r.hit_count}</span>
+                </li>`
+            ).join('');
+        }
+    } catch (e) {
+        console.error('加载仪表盘失败:', e);
+    }
+}
+loadDashboard();
+</script>
+{% endblock %}
