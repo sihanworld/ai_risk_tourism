@@ -1,0 +1,36 @@
+# Web框架
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+gunicorn==23.0.0          # 生产部署 (P4-L3 2026-08-08)
+pydantic==2.10.3
+pydantic-settings==2.7.0
+python-multipart==0.0.18
+jinja2==3.1.4
+
+# 数据库
+sqlalchemy==2.0.36
+pymysql==1.1.1
+aiomysql==0.2.0
+cryptography==44.0.0
+
+# 数据处理
+pandas==2.2.3
+numpy==2.2.0
+scikit-learn==1.5.1   # XGBoost 训练 stratify 拆分 + AUC/F1 评估 (P4-L3 2026-08-08)
+xgboost==2.0.3        # XGBoost 模型 (P4-L4 2026-08-08 漏包补上)
+
+# AI Agent
+deepagents==0.5.2
+langchain==1.2.15
+langchain-openai==1.1.12
+langgraph==1.1.6
+
+# 测试
+pytest==8.3.4
+pytest-asyncio==0.25.0
+httpx==0.28.1
+
+# 工具
+python-dotenv==1.0.1
+ulid-py==1.1.0
+faker==33.1.0

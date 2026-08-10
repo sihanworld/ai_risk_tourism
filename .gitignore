@@ -1,0 +1,54 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# 临时文件 / 垃圾文件 (开发过程输出, 不入版本库)
+_trash_*/
+.trash/
+*.tmp
+*.bak
+
+# IDE
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# 日志
+logs/
+*.log
+
+# 模型/数据
+ml_models/
+*.pkl
+*.joblib
+*.json.gz
+# XGBoost 训练产物 (重建就行, 不入仓)
+app/engine/xgb_model.json
+
+# 环境配置
+.env
+.env.local
+.env.*.local
+# 任何位置的 .env (不限根目录, 防止子目录里也漏)
+**/.env
+**/.env.local
+**/.env.*.local
+
+# 密钥 / 凭证 (防止误传)
+*.pem
+*.key
+*.crt
+secrets/
+credentials/
