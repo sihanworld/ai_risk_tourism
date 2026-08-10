@@ -1,0 +1,52 @@
+-- ============================================
+-- 电商风控系统 - 数据库初始化指南
+-- ============================================
+--
+-- 本系统共需初始化 4 个 SQL 脚本，按以下顺序执行:
+--
+--   1. init_business_tables.sql  -- 17 张业务表 (DDL)
+--   2. init_business_data.sql    -- 业务表测试数据 (~4100 条)
+--   3. init_risk_tables.sql      -- 9 张风控表 (DDL, 含 P4 2 张)
+--   4. init_risk_data.sql        -- 30 条预置风控规则 (R001-R030)
+--
+-- ============================================
+-- 使用方式
+-- ============================================
+--
+-- 方式1 (推荐): 一键 Python 脚本
+--   conda activate risk
+--   python scripts/init_db.py
+--
+-- 方式2: 手动按顺序执行 (在项目根目录下)
+--   mysql -u root -p123321 --default-character-set=utf8mb4 ecs < sql/init_business_tables.sql
+--   mysql -u root -p123321 --default-character-set=utf8mb4 ecs < sql/init_business_data.sql
+--   mysql -u root -p123321 --default-character-set=utf8mb4 ecs < sql/init_risk_tables.sql
+--   mysql -u root -p123321 --default-character-set=utf8mb4 ecs < sql/init_risk_data.sql
+--
+-- 方式3: 仅创建数据库结构 (不含数据)
+--   mysql -u root -p123321 --default-character-set=utf8mb4 ecs < sql/init_business_tables.sql
+--   mysql -u root -p123321 --default-character-set=utf8mb4 ecs < sql/init_risk_tables.sql
+--
+-- 老环境升级 (2026-08-07 之后首次启动):
+--   1. 跑这个 migration 补 6 个字段 (幂等, 重复跑无副作用):
+--      mysql -u root -p123321 ecs < sql/migration_add_2026_08_07_fields.sql
+--      新增: risk_rule.deleted_at / risk_assessment.ml_score / risk_assessment.ml_decision
+--            / risk_blacklist.deleted_at / risk_case.source_id / risk_case.event_type
+--   2. 跑这个 migration 加 2 张 P4 新表 (幂等):
+--      mysql -u root -p123321 ecs < sql/migration_add_p4_tables.sql
+--      (注: init_risk_tables.sql 2026-08-07 后已含这 2 张, 老环境需跑此 migration)
+--
+-- 注: 原 migration_add_case_source_id.sql 已合并到 migration_add_2026_08_07_fields.sql (项 5/6/7)
+--     仅保留作为历史兼容, 不再被 init_db.py 调用
+--
+-- ============================================
+-- 注意事项
+-- ============================================
+-- - 数据库名: ecs (需提前创建)
+-- - 字符集: utf8mb4
+-- - 业务表按外键依赖排序，可安全顺序执行
+-- - 业务数据脚本已包含 SET FOREIGN_KEY_CHECKS = 0 处理
+-- - 如需清空重建，init_business_tables.sql 中所有表使用 DROP TABLE IF EXISTS
+-- - 风控表 9 张 (7 原 + 2 P4 系统管理表 risk_action_log / risk_alert)
+-- - 风控表迁移文件: migration_add_2026_08_07_fields.sql (6 个字段, 含合并自原 case_source_id 的 2 个)
+--                  migration_add_case_source_id.sql (DEPRECATED, 内容已合并)
