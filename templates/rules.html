@@ -90,7 +90,7 @@
                         </div>
                         <div class="col-md-3">
                             <label class="form-label">风险等级</label>
-                            <select class="form-select" id="f_risk_level" required>
+                            <select class="form-select" id="f_risk_level" required onchange="autoFillScoreByLevel()">
                                 <option value="低">低</option>
                                 <option value="中">中</option>
                                 <option value="高">高</option>
@@ -112,9 +112,16 @@
                         </div>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">条件表达式 (JSON)</label>
-                        <textarea class="form-control" id="f_condition" rows="4" required
-                            placeholder='{"field": "order_total_amount", "op": ">=", "value": 5000}'></textarea>
+                        <label class="form-label">条件表达式 (可视化构建器)</label>
+                        <div id="condBuilder" class="p-2 border rounded"
+                             style="background: #f8f9fa; min-height: 60px;">
+                            <!-- JS 动态构建 and/or 树, 替换原来的 textarea -->
+                        </div>
+                        <small class="text-muted">
+                            点"+ 条件"加单条件, 点"+ 分组"加 AND/OR 组合. 字段下拉显示中文标签.
+                            <a href="#" onclick="showRawConditionJson(); return false;">查看 JSON</a>
+                        </small>
+                        <textarea id="f_condition" class="form-control d-none" rows="3"></textarea>
                     </div>
                     <div class="row mb-3">
                         <div class="col-md-3">
@@ -214,6 +221,8 @@ function showCreateModal() {
     document.getElementById('ruleModalTitle').textContent = '新建规则';
     document.getElementById('ruleForm').reset();
     document.getElementById('f_rule_id').disabled = false;
+    // 初始化可视化构建器: 1 个空 AND 分组
+    buildConditionUI({and: [{field: 'user_total_orders', op: '>=', value: 0}]}, 'condBuilder');
     new bootstrap.Modal(document.getElementById('ruleModal')).show();
 }
 
@@ -230,6 +239,8 @@ async function editRule(ruleId) {
     document.getElementById('f_risk_level').value = r.risk_level;
     document.getElementById('f_score').value = r.risk_score;
     document.getElementById('f_action').value = r.action;
+    // 【P4-L5 2026-08-10】用可视化构建器渲染, 不再 textarea
+    buildConditionUI(r.rule_condition, 'condBuilder');
     document.getElementById('f_condition').value = JSON.stringify(r.rule_condition, null, 2);
     document.getElementById('f_priority').value = r.priority;
     document.getElementById('f_description').value = r.description || '';
@@ -237,21 +248,29 @@ async function editRule(ruleId) {
 }
 
 async function saveRule() {
-    let condition;
-    try {
-        condition = JSON.parse(document.getElementById('f_condition').value);
-    } catch (e) {
-        alert('条件表达式JSON格式错误');
+    // 【P4-L5 2026-08-10】从可视化构建器收集 JSON, 替代 JSON.parse(textarea)
+    const condBuilder = document.getElementById('condBuilder');
+    const condition = collectCondition(condBuilder);
+    // 同步到隐藏 textarea (留作 fallback / 调试)
+    document.getElementById('f_condition').value = JSON.stringify(condition, null, 2);
+
+    const riskLevel = document.getElementById('f_risk_level').value;
+    const riskScore = parseInt(document.getElementById('f_score').value);
+    // 前端预校验 risk_level ↔ risk_score (后端再校验一次)
+    const v = validateScoreLevel(riskLevel, riskScore);
+    if (!v.ok) {
+        alert(v.msg);
         return;
     }
+
     const data = {
         rule_id: document.getElementById('f_rule_id').value,
         rule_name: document.getElementById('f_rule_name').value,
         rule_category: document.getElementById('f_category').value,
         event_type: document.getElementById('f_event_type').value,
         rule_condition: condition,
-        risk_level: document.getElementById('f_risk_level').value,
-        risk_score: parseInt(document.getElementById('f_score').value),
+        risk_level: riskLevel,
+        risk_score: riskScore,
         action: document.getElementById('f_action').value,
         priority: parseInt(document.getElementById('f_priority').value) || 0,
         description: document.getElementById('f_description').value,
@@ -278,6 +297,20 @@ async function deleteRule(ruleId) {
     loadRules(currentPage);
 }
 
+
+// [P4-L5 2026-08-10] 选风险等级时自动算分数 (取区间中位数), 用户可改
+function autoFillScoreByLevel() {
+    const level = document.getElementById('f_risk_level').value;
+    const [low, high] = RISK_LEVEL_SCORE_MAP[level] || [0, 100];
+    const mid = Math.round((low + high) / 2);
+    document.getElementById('f_score').value = mid;
+}
+
+// 调试用: 弹窗显示当前条件 JSON
+function showRawConditionJson() {
+    const cond = collectCondition(document.getElementById('condBuilder'));
+    alert(JSON.stringify(cond, null, 2));
+}
 loadRules();
 </script>
 {% endblock %}

@@ -6,6 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db_async
+from app.engine.rule import RuleScoreLevelMismatchError, validate_rule_score_level
 from app.models import RiskRule
 from app.schemas import RuleCreate, RuleListResponse, RuleResponse, RuleUpdate
 from app.service.action_log import orm_to_dict, record_action
@@ -56,6 +57,12 @@ async def api_get_rule(rule_id: str, db: AsyncSession = Depends(get_db_async)):
 
 @rule_router.post("", response_model=RuleResponse, status_code=201)
 async def api_create_rule(data: RuleCreate, db: AsyncSession = Depends(get_db_async)):
+    # 【P4-L5 2026-08-10】risk_level ↔ risk_score 互验: 防止业务方填错
+    try:
+        validate_rule_score_level(data.risk_level, data.risk_score)
+    except RuleScoreLevelMismatchError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
     existing = (await db.execute(
         select(RiskRule).where(RiskRule.rule_id == data.rule_id)
     )).scalar_one_or_none()
@@ -97,9 +104,19 @@ async def api_update_rule(rule_id: str, data: RuleUpdate, db: AsyncSession = Dep
     if not rule:
         raise HTTPException(status_code=404, detail="规则不存在")
 
+    # 【P4-L5 2026-08-10】risk_level ↔ risk_score 互验: 防止更新时填错
+    # 如果调用方传了 risk_level 或 risk_score, 校验最终值是否匹配
+    update_data = data.model_dump(exclude_unset=True)
+    new_level = update_data.get("risk_level", rule.risk_level)
+    new_score = update_data.get("risk_score", rule.risk_score)
+    try:
+        validate_rule_score_level(new_level, new_score)
+    except RuleScoreLevelMismatchError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
     # exclude_unset=True: 只取调用方显式传的字段, 避免空更新覆盖已有数据
     before_value = orm_to_dict(rule, ["rule_name", "risk_level", "risk_score", "action", "is_enabled", "priority"])
-    for key, value in data.model_dump(exclude_unset=True).items():
+    for key, value in update_data.items():
         # rule_condition 是嵌套 dict, 需要重新 JSON 序列化
         if key == "rule_condition" and value is not None:
             value = json.dumps(value, ensure_ascii=False)

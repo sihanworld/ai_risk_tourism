@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 电商风控系统 - 公共前端工具函数
  */
 
@@ -156,3 +156,338 @@ function buildPaginationHtml(currentPage, totalPages, pageSize, loadFnName, cont
     return html.join('');
 }
 
+
+/* ============================================================
+ * 规则条件构建器 (P4-L5 2026-08-10):
+ *   - 26 个特征 key ↔ 中文标签映射 (FEATURE_LABELS)
+ *   - 风险等级 ↔ 分数区间 (RISK_LEVEL_SCORE_MAP, 跟后端 config.py 一致)
+ *   - 按 event_type 拆的阈值 (RISK_EVENT_THRESHOLDS)
+ *   - 可视化构建器: buildConditionUI / collectCondition / parseCondition
+ *   - 双向: UI ↔ JSON 互相转换
+ * ============================================================ */
+
+// 1. 26 特征 key↔中文标签 (跟 ml_model.py FEATURE_COLUMNS 对齐, 中文按业务语义)
+const FEATURE_LABELS = {
+    // 用户画像 (14 维)
+    "user_total_orders":         "用户总订单数",
+    "user_orders_30d":           "用户30天订单数",
+    "user_orders_7d":            "用户7天订单数",
+    "user_total_amount":         "用户累计消费金额",
+    "user_avg_order_amount":     "用户平均订单金额",
+    "user_max_order_amount":     "用户最大单笔金额",
+    "user_refund_count":         "用户退款次数",
+    "user_postsale_count":       "用户售后次数",
+    "user_refund_rate":          "用户退款率",
+    "user_postsale_rate":        "用户售后率",
+    "user_refund_amount":        "用户退款金额",
+    "user_cancel_count":         "用户取消订单次数",
+    "user_complaint_count":      "用户投诉次数",
+    "user_address_count":        "用户使用地址数",
+    // 订单画像 (8 维)
+    "order_total_amount":        "订单总金额",
+    "order_item_count":          "订单商品件数",
+    "order_sku_count":           "订单SKU种类数",
+    "order_discount_amount":     "订单优惠金额",
+    "order_discount_rate":       "订单折扣率",
+    "order_pay_interval_sec":    "下单到支付间隔(秒)",
+    "order_is_night":            "是否凌晨下单",
+    "order_category_count":      "订单商品类目数",
+    // 地址画像 (3 维)
+    "addr_total_count":          "用户地址总数",
+    "addr_province_count":       "用户地址跨省数",
+    "addr_is_new":               "是否新地址",
+};
+
+// 反向: 中文标签 → key (前端下拉显示中文, 内部存 key)
+const LABEL_TO_FEATURE = Object.fromEntries(
+    Object.entries(FEATURE_LABELS).map(([k, v]) => [v, k])
+);
+
+// 2. 风险等级 ↔ 分数区间 (跟后端 config.py RISK_LEVEL_SCORE_MAP 一致)
+const RISK_LEVEL_SCORE_MAP = {
+    "低":   [0, 29],
+    "中":   [30, 59],
+    "高":   [60, 84],
+    "极高": [85, 100],
+};
+
+// 3. 按 event_type 拆的阈值 (跟后端 config.py RISK_EVENT_THRESHOLDS 一致)
+const RISK_EVENT_THRESHOLDS = {
+    "下单":     {pass: 30, mark: 60, review: 80},
+    "支付":     {pass: 25, mark: 55, review: 75},
+    "售后申请":  {pass: 40, mark: 70, review: 85},
+    "物流投诉":  {pass: 35, mark: 65, review: 80},
+    "通用":     {pass: 30, mark: 60, review: 80},
+};
+
+// 4. 支持的运算符
+const OPERATORS = [
+    {value: "",        label: "(任意, 仅作为占位条件)"},
+    {value: ">",       label: "> 大于"},
+    {value: ">=",      label: ">= 大于等于"},
+    {value: "<",       label: "< 小于"},
+    {value: "<=",      label: "<= 小于等于"},
+    {value: "==",      label: "== 等于"},
+    {value: "!=",      label: "!= 不等于"},
+    {value: "in",      label: "in 包含 (数组)"},
+    {value: "not_in",  label: "not_in 不包含 (数组)"},
+    {value: "between", label: "between 区间 [min, max]"},
+];
+
+// 5. 风险等级 (跟后端 risk_level enum 对齐)
+const RISK_LEVELS = ["低", "中", "高", "极高"];
+
+/* === 核心 API === */
+
+// 把 JSON 条件渲染成可视化 UI (递归, 跟 JSON 树一一对应)
+function buildConditionUI(cond, containerId) {
+    const c = document.getElementById(containerId);
+    if (!c) return;
+    c.innerHTML = '';
+    if (!cond || typeof cond !== 'object') cond = {and: []};
+    renderCondNode(cond, c, true);
+}
+
+// 递归渲染 1 个条件节点 (单条件 或 and/or 组合)
+function renderCondNode(cond, parent, isRoot) {
+    if (cond && (cond.and || cond.or)) {
+        // 组合: and/or
+        const op = cond.and ? 'and' : 'or';
+        const wrap = document.createElement('div');
+        wrap.className = 'cond-group mb-2 p-2 border rounded';
+        wrap.style.background = op === 'and' ? '#f0f9ff' : '#fef3c7';
+
+        // 顶部: 组合操作符下拉 + 删除按钮
+        const head = document.createElement('div');
+        head.className = 'd-flex align-items-center mb-2';
+        head.innerHTML = `
+            <select class="form-select form-select-sm w-auto me-2 cond-op-select">
+                <option value="and" ${op === 'and' ? 'selected' : ''}>全部满足 (AND)</option>
+                <option value="or" ${op === 'or' ? 'selected' : ''}>任一满足 (OR)</option>
+            </select>
+            <button type="button" class="btn btn-sm btn-outline-danger ms-auto cond-del-group">删除分组</button>
+        `;
+        // op 切换: and ↔ or
+        head.querySelector('.cond-op-select').addEventListener('change', e => {
+            const newOp = e.target.value;
+            if (newOp === 'and') {
+                cond.or = cond.and; delete cond.and;
+            } else {
+                cond.and = cond.or; delete cond.or;
+            }
+        });
+        // 删分组
+        head.querySelector('.cond-del-group').addEventListener('click', () => {
+            // 把这个分组替换成 [] (空 and), 父级需要重新渲染
+            // 简化: 直接移除
+            wrap.remove();
+        });
+        wrap.appendChild(head);
+
+        // 递归渲染子条件
+        const children = op === 'and' ? cond.and : cond.or;
+        const childBox = document.createElement('div');
+        childBox.className = 'cond-children';
+        children.forEach(child => renderCondNode(child, childBox, false));
+        wrap.appendChild(childBox);
+
+        // 底部: +条件 / +分组 按钮
+        const footer = document.createElement('div');
+        footer.className = 'mt-2';
+        footer.innerHTML = `
+            <button type="button" class="btn btn-sm btn-outline-primary me-1 cond-add-leaf">+ 条件</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary cond-add-group">+ 分组 (${op === 'and' ? 'AND' : 'OR'})</button>
+        `;
+        footer.querySelector('.cond-add-leaf').addEventListener('click', () => {
+            children.push({field: 'user_total_orders', op: '>=', value: 0});
+            buildConditionUI(collectCondition(parent), parent.id);
+        });
+        footer.querySelector('.cond-add-group').addEventListener('click', () => {
+            children.push({and: []});
+            buildConditionUI(collectCondition(parent), parent.id);
+        });
+        wrap.appendChild(footer);
+
+        parent.appendChild(wrap);
+    } else {
+        // 单条件
+        const row = document.createElement('div');
+        row.className = 'cond-leaf d-flex align-items-center mb-2 p-2 border rounded';
+        row.style.background = '#f9fafb';
+
+        // 字段下拉 (中文标签)
+        const fieldSel = document.createElement('select');
+        fieldSel.className = 'form-select form-select-sm me-1 cond-field';
+        fieldSel.style.minWidth = '180px';
+        Object.entries(FEATURE_LABELS).forEach(([key, label]) => {
+            const opt = document.createElement('option');
+            opt.value = key;
+            opt.textContent = label + ` (${key})`;
+            if (cond.field === key) opt.selected = true;
+            fieldSel.appendChild(opt);
+        });
+        fieldSel.addEventListener('change', e => { cond.field = e.target.value; });
+
+        // 运算符下拉
+        const opSel = document.createElement('select');
+        opSel.className = 'form-select form-select-sm me-1 cond-op';
+        opSel.style.minWidth = '160px';
+        OPERATORS.forEach(({value, label}) => {
+            const opt = document.createElement('option');
+            opt.value = value;
+            opt.textContent = label;
+            if (cond.op === value) opt.selected = true;
+            opSel.appendChild(opt);
+        });
+        opSel.addEventListener('change', e => {
+            cond.op = e.target.value;
+            // between 切到 2 个输入框
+            updateValueInput(row, cond);
+        });
+
+        // 值输入 (随 op 联动)
+        const valBox = document.createElement('div');
+        valBox.className = 'cond-val-box me-1';
+        valBox.style.flex = '1';
+        row.appendChild(fieldSel);
+        row.appendChild(opSel);
+        row.appendChild(valBox);
+        updateValueInput(row, cond);
+
+        // 删除
+        const delBtn = document.createElement('button');
+        delBtn.type = 'button';
+        delBtn.className = 'btn btn-sm btn-outline-danger ms-1 cond-del-leaf';
+        delBtn.textContent = '×';
+        delBtn.addEventListener('click', () => row.remove());
+        row.appendChild(delBtn);
+
+        parent.appendChild(row);
+    }
+}
+
+// 值输入框随 op 联动 (in/not_in 数组, between 区间, 其他单值)
+function updateValueInput(row, cond) {
+    const box = row.querySelector('.cond-val-box');
+    if (!box) return;
+    box.innerHTML = '';
+    const op = cond.op;
+
+    if (op === 'between') {
+        // [min, max] 2 个输入框
+        let arr = Array.isArray(cond.value) ? cond.value : [0, 100];
+        const wrap = document.createElement('div');
+        wrap.className = 'd-flex align-items-center';
+        wrap.innerHTML = `
+            <input type="number" step="any" class="form-control form-control-sm me-1 cond-v-between-low" style="width:80px" value="${arr[0]}">
+            <span class="me-1">~</span>
+            <input type="number" step="any" class="form-control form-control-sm cond-v-between-high" style="width:80px" value="${arr[1]}">
+        `;
+        wrap.querySelector('.cond-v-between-low').addEventListener('input', e => {
+            if (!Array.isArray(cond.value)) cond.value = [0, 100];
+            cond.value[0] = parseFloat(e.target.value) || 0;
+        });
+        wrap.querySelector('.cond-v-between-high').addEventListener('input', e => {
+            if (!Array.isArray(cond.value)) cond.value = [0, 100];
+            cond.value[1] = parseFloat(e.target.value) || 100;
+        });
+        box.appendChild(wrap);
+    } else if (op === 'in' || op === 'not_in') {
+        // 数组, 逗号分隔
+        const arrStr = Array.isArray(cond.value) ? cond.value.join(',') : (cond.value || '');
+        const inp = document.createElement('input');
+        inp.type = 'text';
+        inp.className = 'form-control form-control-sm cond-v-arr';
+        inp.placeholder = '逗号分隔, 如: 1,2,3';
+        inp.value = arrStr;
+        inp.addEventListener('input', e => {
+            cond.value = e.target.value.split(',').map(s => s.trim()).filter(Boolean);
+        });
+        box.appendChild(inp);
+    } else if (op === 'in' || op === 'not_in' || op === '') {
+        // 占位 op 不需要 value
+        box.innerHTML = '<small class="text-muted">无 value</small>';
+    } else {
+        // 单值 (数字或字符串, 默认数字)
+        const inp = document.createElement('input');
+        inp.type = 'number';
+        inp.step = 'any';
+        inp.className = 'form-control form-control-sm cond-v-single';
+        inp.value = cond.value ?? 0;
+        inp.addEventListener('input', e => {
+            cond.value = parseFloat(e.target.value) || 0;
+        });
+        box.appendChild(inp);
+    }
+}
+
+// 从 UI 容器收集当前 JSON 条件
+function collectCondition(container) {
+    // 容器只有一个根节点 (group 或 leaf)
+    const root = container.children[0];
+    if (!root) return {and: []};
+    return extractNode(root);
+}
+
+function extractNode(node) {
+    if (node.classList.contains('cond-group')) {
+        const op = node.querySelector('.cond-op-select').value;
+        const children = [];
+        node.querySelectorAll('.cond-children > *').forEach(child => {
+            children.push(extractNode(child));
+        });
+        return op === 'and' ? {and: children} : {or: children};
+    } else if (node.classList.contains('cond-leaf')) {
+        const field = node.querySelector('.cond-field').value;
+        const op = node.querySelector('.cond-op').value;
+        // 值: 从不同输入框读
+        const between = node.querySelector('.cond-v-between-low');
+        const arr = node.querySelector('.cond-v-arr');
+        const single = node.querySelector('.cond-v-single');
+        let value = 0;
+        if (between) {
+            value = [
+                parseFloat(node.querySelector('.cond-v-between-low').value) || 0,
+                parseFloat(node.querySelector('.cond-v-between-high').value) || 0,
+            ];
+        } else if (arr) {
+            value = arr.value.split(',').map(s => s.trim()).filter(Boolean);
+        } else if (single) {
+            value = parseFloat(single.value) || 0;
+        }
+        if (op === '') {
+            // 占位条件: 只返 field
+            return {field};
+        }
+        return {field, op, value};
+    }
+    return {and: []};
+}
+
+// 工具: 根据分数反查风险等级 (前端用, 跟后端 settings.get_risk_level_by_score 对齐)
+function getRiskLevelByScore(score) {
+    for (const [level, [low, high]] of Object.entries(RISK_LEVEL_SCORE_MAP)) {
+        if (score >= low && score <= high) return level;
+    }
+    return score > 100 ? '极高' : '低';
+}
+
+// 工具: 根据 event_type 查阈值
+function getEventThresholds(eventType) {
+    return RISK_EVENT_THRESHOLDS[eventType] || RISK_EVENT_THRESHOLDS['通用'];
+}
+
+// 工具: 校验 risk_score 是否在 risk_level 区间内
+function validateScoreLevel(level, score) {
+    if (!RISK_LEVEL_SCORE_MAP[level]) {
+        return {ok: false, msg: `未知风险等级: ${level}`};
+    }
+    if (typeof score !== 'number' || score < 0 || score > 100) {
+        return {ok: false, msg: `risk_score 必须是 0-100 数字, 当前 ${score}`};
+    }
+    const [low, high] = RISK_LEVEL_SCORE_MAP[level];
+    if (score < low || score > high) {
+        return {ok: false, msg: `${level} 等级分数应在 [${low}, ${high}], 当前 ${score} 越界`};
+    }
+    return {ok: true};
+}
