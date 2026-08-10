@@ -180,8 +180,8 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <!-- 改版加 ?v=YYYYMMDD[vN] 破 FastAPI StaticFiles 强缓存 (max-age=1y), 否则浏览器永远用旧版 -->
-<!-- 2026-08-08v4: 加 mlProbToRiskScore + renderMLScoreBlock, 风险检查/案件详情/评估历史 3 页面统一显示 sigmoid 校准值 -->
-<script src="/static/app.js?v=20260810v1"></script>
+<!-- 2026-08-10v3: buildConditionUI 加 try-catch 调试 + console.error 定位 throw -->
+<script src="/static/app.js?v=20260810v3"></script>
 {% block extra_js %}{% endblock %}
 </body>
 </html>

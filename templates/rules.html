@@ -222,8 +222,17 @@ function showCreateModal() {
     document.getElementById('ruleForm').reset();
     document.getElementById('f_rule_id').disabled = false;
     // 初始化可视化构建器: 1 个空 AND 分组
-    buildConditionUI({and: [{field: 'user_total_orders', op: '>=', value: 0}]}, 'condBuilder');
-    new bootstrap.Modal(document.getElementById('ruleModal')).show();
+    // [P4-L5 2026-08-10 修复] 放到 shown.bs.modal 之后调, 避开 Bootstrap 5 首次 show
+    // 时的样式重排 / focus trap 干扰, 否则第一次开 modal 时 buildConditionUI 内部
+    // <select>/<input> 插入到 DOM 过程中被 Bootstrap 内部脚本 throw, 导致 condBuilder 空.
+    // 第二次开 modal 状态稳定了才不 throw (用户体感: 第一次开空白, 第二次开才看到).
+    const modalEl = document.getElementById('ruleModal');
+    const onShown = () => {
+        buildConditionUI({and: [{field: 'user_total_orders', op: '>=', value: 0}]}, 'condBuilder');
+        modalEl.removeEventListener('shown.bs.modal', onShown);
+    };
+    modalEl.addEventListener('shown.bs.modal', onShown);
+    new bootstrap.Modal(modalEl).show();
 }
 
 async function editRule(ruleId) {
@@ -239,12 +248,17 @@ async function editRule(ruleId) {
     document.getElementById('f_risk_level').value = r.risk_level;
     document.getElementById('f_score').value = r.risk_score;
     document.getElementById('f_action').value = r.action;
-    // 【P4-L5 2026-08-10】用可视化构建器渲染, 不再 textarea
-    buildConditionUI(r.rule_condition, 'condBuilder');
     document.getElementById('f_condition').value = JSON.stringify(r.rule_condition, null, 2);
     document.getElementById('f_priority').value = r.priority;
     document.getElementById('f_description').value = r.description || '';
-    new bootstrap.Modal(document.getElementById('ruleModal')).show();
+    // [P4-L5 2026-08-10 修复] 跟 showCreateModal 一样, buildConditionUI 放到 shown 之后
+    const modalEl = document.getElementById('ruleModal');
+    const onShown = () => {
+        buildConditionUI(r.rule_condition, 'condBuilder');
+        modalEl.removeEventListener('shown.bs.modal', onShown);
+    };
+    modalEl.addEventListener('shown.bs.modal', onShown);
+    new bootstrap.Modal(modalEl).show();
 }
 
 async function saveRule() {

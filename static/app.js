@@ -242,10 +242,15 @@ const RISK_LEVELS = ["低", "中", "高", "极高"];
 // 把 JSON 条件渲染成可视化 UI (递归, 跟 JSON 树一一对应)
 function buildConditionUI(cond, containerId) {
     const c = document.getElementById(containerId);
-    if (!c) return;
+    if (!c) { console.error('buildConditionUI: container not found', containerId); return; }
     c.innerHTML = '';
     if (!cond || typeof cond !== 'object') cond = {and: []};
-    renderCondNode(cond, c, true);
+    try {
+        renderCondNode(cond, c, true);
+    } catch (e) {
+        console.error('renderCondNode throw', e, 'cond=', cond);
+        c.innerHTML = '<pre style="color:red;font-size:11px;">' + (e && e.message || e) + '\n\n' + (e && e.stack || '') + '</pre>';
+    }
 }
 
 // 递归渲染 1 个条件节点 (单条件 或 and/or 组合)

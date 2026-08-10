@@ -1,6 +1,6 @@
 # 电商风控系统 AI_Risk — 项目启动文档
 
-> 5 层架构 · 26 张表 · **382 个测试** · 25 维特征 · 30 条规则 · 8 个 AI 工具 · V2 XGBoost 双轨融合 + sigmoid 校准 + 训练数据严格化 + 一条龙命令 + 教学场景训练 + 统一日志 + 一键启动 + 通用分页 + 左侧固定布局 + 训练质量验收 + 最佳 F1 阈值 + RISK 用户参数化生成 + 训练数据校验 + 训练数据生成器正例控制 + 造数据 day_offset 循环回归 + 强制正例比例 + 分页栏粘底 + 分页按钮文字可见 + 脚本 emoji GBK 修复 + 校验函数去重
+> 5 层架构 · 26 张表 · **396 个测试** · 25 维特征 · 30 条规则 · 8 个 AI 工具 · V2 XGBoost 双轨融合 + sigmoid 校准 + 训练数据严格化 + 一条龙命令 + 教学场景训练 + 统一日志 + 一键启动 + 通用分页 + 左侧固定布局 + 训练质量验收 + 最佳 F1 阈值 + RISK 用户参数化生成 + 训练数据校验 + 训练数据生成器正例控制 + 造数据 day_offset 循环回归 + 强制正例比例 + 分页栏粘底 + 分页按钮文字可见 + 脚本 emoji GBK 修复 + 校验函数去重 + 规则可视化构建器 + 规则配置改造 + modal 初始化时机修复
 >
 > 适用：项目第一次启动 / 老环境升级 / 规则制定 / XGBoost 训练 / 启动服务
 
@@ -822,8 +822,9 @@ python scripts/main.py
 - 脚本：`scripts/` (8 个脚本, 含 gen_10w_data / gen_risk_data_with_dates / migrate_2026_08_07)
 - DDL/SQL：`sql/` (6 个 DDL + 3 个 migration)
 - 文档：`docs/` (含 11 份教学 md, 新增 `agent_design.md` 介绍 8 @tool 设计)
-- 测试：`tests/` (382 cases, 含 P4-L3 案件超时关闭 + XGBoost 特征重要性 + XGBoost 训练优化 4 个 + XGBoost 训练质量验收 6 个 (假收敛检测 + 最佳 F1 阈值) + P4-L4 统一日志 13 个 + 一键启动 preflight 16 个 + scheduler bug 回归 1 个 + 通用分页 9 个 + 左侧固定布局 10 个 (含分页栏粘底 2 个 + 分页按钮文字可见 1 个) + train 脚本解包顺序回归 1 个 + RISK 用户参数化生成 8 个 + 训练数据校验 6 个 (条数/pos 比例/时间跨度) + 训练数据生成器正例控制 12 个 (`--balance-pos` / `--target-pos-ratio` / `--live` / `--force-pos-ratio` 参数 + 正例统计 + 比例提示 + day_offset 循环回归 + 3 个高风险 picker + retry 机制 + 脚本 emoji GBK 修复 + decision_hit 引用清理) + 前端 ML 评分 sigmoid 校准 21 个 + 一条龙命令 13 个 + 教学场景训练 11 个 + 训练数据严格化 15 个 + sigmoid 校准 15 个 + ML 风险检查页 7 个 + 物流投诉 picker bug 修复 4 个 + P4-L5 校验去重 15 个 (死代码删除 + 决策引擎重复调用清理) + P4-L5 黑名单 4 action 14 个 (manage_blacklist 字典派发按 action 动态传参 + 移除走 case.remove_blacklist 软删 + 边界签名锁定) + P4-L5 撞黑短路 UI 提示 12 个 (RiskCheckResponse.message 字段 + _blacklist_reject 填 message + 前端判断 blacklist_reject 不渲染 ML 块)
-+ P4-L5 规则配置改造 30 个 (RISK_LEVEL_SCORE_MAP 区间一致性 + RISK_EVENT_THRESHOLDS 按 event_type 拆 + validate_rule_score_level 互验 + 前端 26 特征 + 可视化构建器 + rules.html 改造))
+- 测试：`tests/` (396 cases, 含 P4-L3 案件超时关闭 + XGBoost 特征重要性 + XGBoost 训练优化 4 个 + XGBoost 训练质量验收 6 个 (假收敛检测 + 最佳 F1 阈值) + P4-L4 统一日志 13 个 + 一键启动 preflight 16 个 + scheduler bug 回归 1 个 + 通用分页 9 个 + 左侧固定布局 10 个 (含分页栏粘底 2 个 + 分页按钮文字可见 1 个) + train 脚本解包顺序回归 1 个 + RISK 用户参数化生成 8 个 + 训练数据校验 6 个 (条数/pos 比例/时间跨度) + 训练数据生成器正例控制 12 个 (`--balance-pos` / `--target-pos-ratio` / `--live` / `--force-pos-ratio` 参数 + 正例统计 + 比例提示 + day_offset 循环回归 + 3 个高风险 picker + retry 机制 + 脚本 emoji GBK 修复 + decision_hit 引用清理) + 前端 ML 评分 sigmoid 校准 21 个 + 一条龙命令 13 个 + 教学场景训练 11 个 + 训练数据严格化 15 个 + sigmoid 校准 15 个 + ML 风险检查页 7 个 + 物流投诉 picker bug 修复 4 个 + P4-L5 校验去重 15 个 (死代码删除 + 决策引擎重复调用清理) + P4-L5 黑名单 4 action 14 个 (manage_blacklist 字典派发按 action 动态传参 + 移除走 case.remove_blacklist 软删 + 边界签名锁定) + P4-L5 撞黑短路 UI 提示 12 个 (RiskCheckResponse.message 字段 + _blacklist_reject 填 message + 前端判断 blacklist_reject 不渲染 ML 块)
++ P4-L5 规则配置改造 30 个 (RISK_LEVEL_SCORE_MAP 区间一致性 + RISK_EVENT_THRESHOLDS 按 event_type 拆 + validate_rule_score_level 互验 + 前端 25 特征 + 可视化构建器 + rules.html 改造)
++ P4-L5 modal 初始化时机修复 14 个 (buildConditionUI 放到 shown.bs.modal 事件回调 + showCreateModal/editRule 同步 + try-catch 兜底 + app.js 25 特征 10 op 锁住))
 - 部署：`docker/` (P4-L4 2026-08-08, 含 Dockerfile + docker-compose.yml + nginx.conf + .env.example + README)
 - 环境管理：`uv/` (P4-L4 2026-08-08, 含 pyproject.toml + requirements-uv.txt + uv.lock + README)
 - 部署：`Dockerfile` + `docker-compose.yml` + `nginx.conf` (P4-L3 一键启动)
