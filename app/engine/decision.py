@@ -46,32 +46,35 @@ def _generate_id(prefix: str = "") -> str:
     return f"{prefix}{ulid.new().str.lower()}"
 
 
-def _score_to_level(score: int) -> str:
-    """评分 → 风险等级. 阈值跟 _score_to_decision 相同, 但 level 是描述性, decision 是操作性"""
-    if score < settings.RISK_PASS_THRESHOLD:
+def _score_to_level(score: int, event_type: str = "通用") -> str:
+    """评分 → 风险等级. 阈值按 event_type 拆, 找不到 fallback 到全局默认.
+
+    教学场景下售后比下单严 (RISK_EVENT_THRESHOLDS 表里售后阈值更高).
+    业务方调阈值不用动代码, 改 config.py 的 RISK_EVENT_THRESHOLDS 即可.
+    """
+    th = settings.get_event_thresholds(event_type)
+    if score < th["pass"]:
         return "低"
-    elif score < settings.RISK_MARK_THRESHOLD:
+    elif score < th["mark"]:
         return "中"
-    elif score < settings.RISK_REVIEW_THRESHOLD:
+    elif score < th["review"]:
         return "高"
     else:
         return "极高"
 
 
-def _score_to_decision(score: int) -> str:
+def _score_to_decision(score: int, event_type: str = "通用") -> str:
     """评分 → 决策动作. 4 档: 通过 / 标记 / 人工审核 / 拒绝.
 
-    【P0-S2 修复 2026-08-07】原代码这里用错阈值, 写成
-    `score < settings.RISK_VETO_MIN_SCORE` (90), 跟 test_risk_decision.py
-    里 test_decision_mapping 的期望 (80→拒绝) 对不上. 已改为用
-    RISK_REVIEW_THRESHOLD (80) — 这是"决策阈值", 跟 RISK_VETO_MIN_SCORE
-    (90, "veto 推分下限") 是两个不同的概念, 不能再混.
+    【P0-S2 修复 2026-08-07】原代码用错阈值, 已改为 RISK_REVIEW_THRESHOLD.
+    【P4-L5 2026-08-10】按 event_type 拆阈值, 找不到 fallback 到全局默认.
     """
-    if score < settings.RISK_PASS_THRESHOLD:
+    th = settings.get_event_thresholds(event_type)
+    if score < th["pass"]:
         return "通过"
-    elif score < settings.RISK_MARK_THRESHOLD:
+    elif score < th["mark"]:
         return "标记"
-    elif score < settings.RISK_REVIEW_THRESHOLD:
+    elif score < th["review"]:
         return "人工审核"
     else:
         return "拒绝"
@@ -268,6 +271,7 @@ def _ml_prob_to_risk_score(prob: float, k: float = 3.0) -> int:
 def _calculate_decision(
     rules: list[RuleHitResult],
     features: dict,
+    event_type: str = "通用",
 ) -> tuple[int, str, str, float, str]:
     """步骤 6: 算评分 + 一票否决 + 双轨融合 + 映射.
 
@@ -275,8 +279,9 @@ def _calculate_decision(
         rule_score = 0-100 整数 (max+bonus)
         ml_score   = 0-100 整数 (XGBoost P(拒绝) sigmoid 校准)
         final_score = α × rule_score + β × ml_score
-        α = settings.ML_WEIGHT_RULE (默认 0.5), β = settings.ML_WEIGHT_XGB (默认 0.5)
-    兜底: XGBoost 未加载 → 只用 rule_score.
+
+    【P4-L5 2026-08-10】event_type 按场景拆阈值 (config.RISK_EVENT_THRESHOLDS).
+    单元测试可传任意 event_type 验证.
 
     【P4-L4 2026-08-08 修复】ML 评分量纲错配: 之前 'int(score * 100)' 是伪转换,
         0.7 表示"拒绝概率 70%" ≠ "风险分 70" (一个是概率, 一个是分值), 直接平均语义错.
@@ -315,8 +320,8 @@ def _calculate_decision(
         # XGBoost 没启用, 走纯规则
         final_score = rule_score
 
-    risk_level = _score_to_level(final_score)
-    decision = _score_to_decision(final_score)
+    risk_level = _score_to_level(final_score, event_type)
+    decision = _score_to_decision(final_score, event_type)
 
     # 硬性一票否决: 不被 XGBoost 推翻
     # 场景: R002 (单笔 10000+) 命中 → rule_score=95, ML 给出 0.1 → 融合后 52.5
@@ -557,7 +562,7 @@ async def run_risk_check(
     rules = await _evaluate_rules(db, ctx, features)
 
     # 6. 算决策 (含一票否决 + 双轨融合)
-    final_score, risk_level, decision, ml_score, ml_decision = _calculate_decision(rules, features)
+    final_score, risk_level, decision, ml_score, ml_decision = _calculate_decision(rules, features, request.event_type)
 
     # 7. 落库 + 响应
     # flush 发 SQL 但不 commit, 让 event_id 落库可被 FK 引用

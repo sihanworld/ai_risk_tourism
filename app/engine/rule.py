@@ -2,6 +2,9 @@
 规则引擎: 基于 JSON 条件表达式对特征字典求值, 判断规则是否命中.
 
 支持的运算符: >, >=, <, <=, ==, !=, in, not_in, between, and, or
+
+【P4-L5 2026-08-10】新增 risk_level ↔ risk_score 互验:
+  保存规则前调用 validate_rule_score_level() 确保 score 落在 level 对应区间.
 """
 import json
 import logging
@@ -10,9 +13,42 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.models import RiskRule
 
 logger = logging.getLogger(__name__)
+
+
+class RuleScoreLevelMismatchError(ValueError):
+    """风险等级跟分数不匹配 (业务校验失败)."""
+
+
+def validate_rule_score_level(risk_level: str, risk_score: int) -> None:
+    """校验 risk_score 是否落在 risk_level 对应区间. 不匹配抛 RuleScoreLevelMismatchError.
+
+    教学场景下, 业务方加规则时容易填错 (比如"极高"等级但只填 50 分).
+    改 config.py 的 RISK_LEVEL_SCORE_MAP 即可调整区间, 不用动代码.
+
+    用法:
+        try:
+            validate_rule_score_level("极高", 50)  # 抛错, 50 不在 [85, 100]
+        except RuleScoreLevelMismatchError as e:
+            return HTTPException(400, str(e))
+    """
+    if risk_level not in settings.RISK_LEVEL_SCORE_MAP:
+        raise RuleScoreLevelMismatchError(
+            f"未知风险等级: {risk_level}, 应该是 {list(settings.RISK_LEVEL_SCORE_MAP.keys())} 之一"
+        )
+    if not isinstance(risk_score, int) or not (0 <= risk_score <= 100):
+        raise RuleScoreLevelMismatchError(
+            f"risk_score 必须是 0-100 整数, 当前 {risk_score!r}"
+        )
+    low, high = settings.RISK_LEVEL_SCORE_MAP[risk_level]
+    if not (low <= risk_score <= high):
+        raise RuleScoreLevelMismatchError(
+            f"风险等级 {risk_level} 对应分数区间 [{low}, {high}], "
+            f"当前 risk_score={risk_score} 越界"
+        )
 
 
 class RuleHitResult:
