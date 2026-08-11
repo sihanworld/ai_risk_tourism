@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}案件管理 - 电商风控系统{% endblock %}
+{% block title %}案件管理 - 旅游风控系统{% endblock %}
 {% block content %}
 <h4 class="mb-4">案件管理</h4>
 
@@ -135,7 +135,7 @@ async function loadCases(page) {
                     <button class="btn btn-outline-primary btn-sm" onclick="viewCase('${c.case_id}')">详情</button>
                     ${c.source_id ? `<button class="btn btn-outline-warning btn-sm"
                         title="用 ${c.source_id} 重新执行风控检查"
-                        onclick="recheckCase('${c.case_id}','${c.source_id}','${c.user_id}','${c.event_type || '下单'}')">
+                        onclick="recheckCase('${c.case_id}','${c.source_id}','${c.user_id}','${c.event_type || '预订'}')">
                         <i class="bi bi-arrow-repeat"></i> 重做检查
                     </button>` : '<span class="text-muted small" title="老案件未记录业务ID, 需手动填写">无 source_id</span>'}
                 </td>
@@ -252,7 +252,7 @@ function recheckCase(caseId, sourceId, userId, eventType) {
     }
     sessionStorage.setItem('risk_check_prefill', JSON.stringify({
         case_id: caseId,
-        event_type: eventType || '下单',
+        event_type: eventType || '预订',
         user_id: userId,
         source_id: sourceId,
     }));

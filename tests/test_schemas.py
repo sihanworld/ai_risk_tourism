@@ -19,11 +19,11 @@ class TestRiskCheckRequest:
     def test_valid_request(self):
         """合法 event_type → 通过"""
         req = RiskCheckRequest(
-            event_type="下单",
+            event_type="预订",
             source_id="order_001",
             user_id="1001",
         )
-        assert req.event_type == "下单"
+        assert req.event_type == "预订"
         assert req.user_id == "1001"
         # 可选字段默认 None
         assert req.order_id is None
@@ -32,7 +32,7 @@ class TestRiskCheckRequest:
 
     def test_all_4_event_types(self):
         """4 个合法 event_type 都能过"""
-        for et in ["下单", "支付", "售后申请", "物流投诉"]:
+        for et in ["预订", "支付", "退改签", "行程开始"]:
             req = RiskCheckRequest(event_type=et, source_id="x", user_id="u")
             assert req.event_type == et
 
@@ -46,7 +46,7 @@ class TestRiskCheckRequest:
     def test_missing_required_field(self):
         """必填字段 source_id 缺失 → ValidationError"""
         with pytest.raises(ValidationError) as exc_info:
-            RiskCheckRequest(event_type="下单", user_id="u")  # 没传 source_id
+            RiskCheckRequest(event_type="预订", user_id="u")  # 没传 source_id
         assert "source_id" in str(exc_info.value)
 
 
@@ -77,8 +77,8 @@ class TestRuleCreate:
         rule = RuleCreate(
             rule_id="R_TEST",
             rule_name="测试规则",
-            rule_category="订单欺诈",
-            event_type="下单",
+            rule_category="预订欺诈",
+            event_type="预订",
             rule_condition={"field": "x", "op": ">", "value": 5},  # dict 不是 str
             risk_level="高",
             risk_score=70,
@@ -94,7 +94,7 @@ class TestRuleCreate:
         """risk_score 超出 0-100 范围 → ValidationError"""
         with pytest.raises(ValidationError) as exc_info:
             RuleCreate(
-                rule_id="R1", rule_name="t", rule_category="订单欺诈", event_type="通用",
+                rule_id="R1", rule_name="t", rule_category="预订欺诈", event_type="通用",
                 rule_condition={"field": "x", "op": ">", "value": 1},
                 risk_level="高", risk_score=150,  # 超过 100
                 action="人工审核",

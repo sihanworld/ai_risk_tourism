@@ -1,5 +1,5 @@
 """
-电商风控系统 - 带日期范围的模拟风控评估数据生成 (异步)
+旅游风控系统 - 带日期范围的模拟风控评估数据生成 (异步)
 支持指定"近 N 天"或"起止日期"造数据，让仪表盘趋势图有跨天数据
 
 【P4-L3 2026-08-08 第三轮】支持 --balance-pos / --target-pos-ratio 控制正负例比例:
@@ -128,7 +128,7 @@ async def _pick_order_for_balance(db, balance_pos: bool):
 
 
 async def _pick_postsale_for_balance(db, balance_pos: bool):
-    """从售后池挑一条; balance_pos=True 时 80% 概率挑 RISK 用户售后."""
+    """从退改签池挑一条; balance_pos=True 时 80% 概率挑 RISK 用户退改签."""
     if balance_pos:
         if random.random() < 0.8:
             r = await db.execute(text("""
@@ -156,12 +156,12 @@ async def _pick_postsale_for_balance(db, balance_pos: bool):
 # ============================================================
 # 【P4-L3 2026-08-08 第五轮】--force-pos-ratio 配套: 强制造"高风险事件"路径
 # 区别于 --balance-pos (只挑 RISK 用户, 但业务规则不保证命中),
-# --force-pos-ratio 选"已知能触发高风险规则"的事件 (RISK001-005 原始 5 个高风险用户的售后)
+# --force-pos-ratio 选"已知能触发高风险规则"的事件 (RISK001-005 原始 5 个高风险用户的退改签)
 # + 跑完 process_event 后判断 decision, 如果还是"通过/标记"就 retry (换其他高风险事件)
 # 这样能保证最终正例比例 >= force_pos_ratio * 0.7 (经验值)
 # ============================================================
 async def _pick_forced_postsale(db):
-    """强制正例路径: 选 RISK 用户的售后 (必触发高退款率规则)."""
+    """强制正例路径: 选 RISK 用户的退改签 (必触发高退款率规则)."""
     r = await db.execute(text("""
         SELECT p.postsale_id, oi.user_id
         FROM postsale p
@@ -175,7 +175,7 @@ async def _pick_forced_postsale(db):
 
 
 async def _pick_forced_logistics_complaint(db):
-    """强制正例路径: 物流投诉 (必触发物流投诉规则)."""
+    """强制正例路径: 行程投诉 (必触发行程投诉规则)."""
     r = await db.execute(text("""
         SELECT record_id, user_id
         FROM logistics_complaints_record
@@ -275,7 +275,7 @@ async def generate_risk_data_with_dates(
             print(f"📌 --live 模式: 不回写 create_time, 数据 create_time=now, 仪表盘'今日'能看到")
         # 【P4-L3 第五轮】--force-pos-ratio 模式提示
         if force_pos_ratio is not None:
-            print(f"[FORCE-POS] --force-pos-ratio 模式: 强制 {force_pos_ratio*100:.0f}% 走高风险事件路径 (RISK 售后/物流投诉/高额订单 + retry)")
+            print(f"[FORCE-POS] --force-pos-ratio 模式: 强制 {force_pos_ratio*100:.0f}% 走高风险事件路径 (RISK 退改签/行程投诉/高额订单 + retry)")
 
         print(f"日期范围: {start_dt.date()} ~ {end_dt.date()}")
         print(f"每天数据量: {daily_rule}")
@@ -299,7 +299,7 @@ async def generate_risk_data_with_dates(
             print("错误: 数据库里没有订单数据, 请先跑 init_db.py")
             return
 
-        print(f"可用订单: {len(all_orders)} 条, 售后: {len(all_postsales)} 条\n")
+        print(f"可用订单: {len(all_orders)} 条, 退改签: {len(all_postsales)} 条\n")
 
         total_days = (end_dt.date() - start_dt.date()).days + 1
         grand_total = 0
@@ -342,9 +342,9 @@ async def generate_risk_data_with_dates(
                 # 准备 picker 列表 (force 模式 3 个高风险 picker, 普通模式 None)
                 if use_force_pos:
                     pickers = [
-                        ("售后申请", _pick_forced_postsale, "postsale"),
-                        ("物流投诉", _pick_forced_logistics_complaint, "complaint"),
-                        ("下单", _pick_forced_order_for_high_amount, "order"),
+                        ("退改签", _pick_forced_postsale, "postsale"),
+                        ("行程开始", _pick_forced_logistics_complaint, "complaint"),
+                        ("预订", _pick_forced_order_for_high_amount, "order"),
                     ]
                     random.shuffle(pickers)
                 # 最多 retry 次数 (force 模式 3 次, 普通 1 次)
@@ -366,7 +366,7 @@ async def generate_risk_data_with_dates(
                         elif ptype == "complaint":
                             rec_id, user_id = picked
                             # 【P4-L4 2026-08-08 修复】source_id 必须跟 validator.py 校验规则对得上
-                            # validator: ("物流投诉",): (LogisticsComplaintsRecord, "record_id", int, ...)
+                            # validator: ("行程开始",): (LogisticsComplaintsRecord, "record_id", int, ...)
                             # record_id 是 bigint AUTO_INCREMENT, 强转 int("COMP_xxx") 会 ValueError
                             # 修复: 直接用 record_id, 不加 "COMP_" 前缀
                             request = RiskCheckRequest(
@@ -379,7 +379,7 @@ async def generate_risk_data_with_dates(
                                 order_id=order_id, receive_id=receive_id,
                             )
                     else:
-                        # 普通路径: --balance-pos 80% 概率从 RISK 用户挑, 60% 概率用售后
+                        # 普通路径: --balance-pos 80% 概率从 RISK 用户挑, 60% 概率用退改签
                         if balance_pos:
                             ps_odds = 0.6
                         else:
@@ -390,7 +390,7 @@ async def generate_risk_data_with_dates(
                             if picked:
                                 ps_id, user_id = picked
                                 request = RiskCheckRequest(
-                                    event_type="售后申请",
+                                    event_type="退改签",
                                     source_id=ps_id,
                                     user_id=user_id,
                                 )
@@ -399,7 +399,7 @@ async def generate_risk_data_with_dates(
                                 if not picked:
                                     break
                                 order_id, user_id, receive_id = picked
-                                event_type = random.choice(["下单", "下单", "下单", "支付", "支付"])
+                                event_type = random.choice(["预订", "预订", "预订", "支付", "支付"])
                                 request = RiskCheckRequest(
                                     event_type=event_type,
                                     source_id=order_id,
@@ -412,7 +412,7 @@ async def generate_risk_data_with_dates(
                             if not picked:
                                 break
                             order_id, user_id, receive_id = picked
-                            event_type = random.choice(["下单", "下单", "下单", "支付", "支付"])
+                            event_type = random.choice(["预订", "预订", "预订", "支付", "支付"])
                             request = RiskCheckRequest(
                                 event_type=event_type,
                                 source_id=order_id,
@@ -536,7 +536,7 @@ if __name__ == "__main__":
                         help="【P4-L3】目标正例比例 (0.0-1.0), 配合 --balance-pos 循环造数到达标")
     # 【P4-L3 2026-08-08 第五轮】--force-pos-ratio: 强制走"已知能触发规则的高风险事件"路径
     parser.add_argument("--force-pos-ratio", type=float, default=None,
-                        help="【P4-L3 第五轮】强制每条按此概率走'高风险事件'路径 (RISK 用户售后/物流投诉/高额订单), "
+                        help="【P4-L3 第五轮】强制每条按此概率走'高风险事件'路径 (RISK 用户退改签/行程投诉/高额订单), "
                              "并 retry 最多 3 次换事件, 保证最终正例比例接近 force_pos_ratio. "
                              "区别 --balance-pos: balance 只挑 RISK 用户, 但业务规则不保证命中; "
                              "force 强制触发规则, 更激进但全用 RISK 用户数据")

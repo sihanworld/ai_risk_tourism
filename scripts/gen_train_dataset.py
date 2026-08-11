@@ -1,5 +1,5 @@
 """
-电商风控系统 - 训练数据集生成 (P4-L4 2026-08-08)
+旅游风控系统 - 训练数据集生成 (P4-L4 2026-08-08)
 
 【目的】
   造一份**严格标注**的 XGBoost 训练数据集 (1500 条), 满足:
@@ -15,8 +15,8 @@
     - 正例比例 < 3% (RISK 用户少), 模型假收敛
     - ml_score 字段是 XGBoost 推理结果, 但当时模型未训 → 0.00141 这种垃圾值
   现在严格控制:
-    - 30 RISK 用户 → 25 条高风险事件 (售后申请) → 99% 拒绝/审核
-    - 30 普通用户 → 25 条正常事件 (普通下单) → 99% 通过
+    - 30 RISK 用户 → 25 条高风险事件 (退改签) → 99% 拒绝/审核
+    - 30 普通用户 → 25 条正常事件 (普通预订) → 99% 通过
     - 正例比例 ≈ 45-50%
     - ml_score 字段 = NULL (干净, 训练 SQL 显式 WHERE ml_score IS NULL)
 
@@ -70,12 +70,12 @@ async def _pick_risk_users(db, n: int) -> list[str]:
 
 
 async def _pick_normal_users(db, n: int) -> list[str]:
-    """从普通用户里选 N 个 (按订单数 DESC 选最活跃的, 触发 30 规则的概率小)."""
+    """从普通用户里选 N 个 (排除 RISK 预置用户与黑名单用户)."""
     r = await db.execute(text("""
         SELECT user_id
         FROM user_info
         WHERE user_id NOT LIKE :prefix
-        AND user_id REGEXP '^[0-9]+$'
+        AND user_id NOT LIKE 'U_BLACK%'
         ORDER BY user_id
         LIMIT :n
     """), {"prefix": f"{RISKY_USER_PREFIX}%", "n": n})
@@ -88,7 +88,7 @@ async def _pick_normal_users(db, n: int) -> list[str]:
 # ============================================================
 
 async def _pick_postsale_for_user(db, user_id: str) -> tuple | None:
-    """挑该用户的一条售后记录 (postsale_id, user_id)."""
+    """挑该用户的一条退改签记录 (postsale_id, user_id)."""
     r = await db.execute(text("""
         SELECT p.postsale_id, oi.user_id
         FROM postsale p
@@ -177,14 +177,14 @@ async def gen_train_dataset(
         neg_count = 0
         failed = 0
         plan = []
-        # RISK 用户 → 售后申请 (99% 触发 R004 高退款率等)
+        # RISK 用户 → 退改签 (99% 触发 R004 高退款率等)
         for uid in risk_users:
             for _ in range(per_user):
-                plan.append((uid, "售后申请"))
-        # 普通用户 → 普通下单 (99% 不触规则)
+                plan.append((uid, "退改签"))
+        # 普通用户 → 普通预订 (99% 不触规则)
         for uid in normal_users:
             for _ in range(per_user):
-                plan.append((uid, "下单"))
+                plan.append((uid, "预订"))
 
         random.shuffle(plan)  # 乱序, 避免时间戳聚集
         print(f"\n[2] 造 {len(plan)} 条事件 (乱序)...")
@@ -192,32 +192,32 @@ async def gen_train_dataset(
         normal_pos = 0
         for idx, (uid, event_type) in enumerate(plan, 1):
             try:
-                if event_type == "售后申请":
+                if event_type == "退改签":
                     picked = await _pick_postsale_for_user(db, uid)
                     if not picked:
-                        # 售后不够, fallback 到下单
+                        # 退改签不够, fallback 到预订
                         picked = await _pick_order_for_user(db, uid)
                         if not picked:
                             failed += 1
                             continue
                         order_id, user_id, receive_id = picked
                         request = RiskCheckRequest(
-                            event_type="下单", source_id=order_id, user_id=user_id,
+                            event_type="预订", source_id=order_id, user_id=user_id,
                             order_id=order_id, receive_id=receive_id,
                         )
                     else:
                         ps_id, user_id = picked
                         request = RiskCheckRequest(
-                            event_type="售后申请", source_id=ps_id, user_id=user_id,
+                            event_type="退改签", source_id=ps_id, user_id=user_id,
                         )
-                else:  # 下单
+                else:  # 预订
                     picked = await _pick_order_for_user(db, uid)
                     if not picked:
                         failed += 1
                         continue
                     order_id, user_id, receive_id = picked
                     request = RiskCheckRequest(
-                        event_type="下单", source_id=order_id, user_id=user_id,
+                        event_type="预订", source_id=order_id, user_id=user_id,
                         order_id=order_id, receive_id=receive_id,
                     )
 

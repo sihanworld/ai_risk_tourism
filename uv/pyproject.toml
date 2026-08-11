@@ -1,7 +1,7 @@
 [project]
 name = "ai-risk"
 version = "2.0.0"
-description = "电商风控系统 - 规则引擎 + XGBoost 双轨融合 + AI Agent (教学项目)"
+description = "旅游风控系统 - 规则引擎 + XGBoost 双轨融合 + AI Agent (教学项目)"
 authors = [
     { name = "Mavis", email = "dev@example.com" },
 ]
@@ -38,6 +38,7 @@ dependencies = [
     "python-dotenv>=1.0.0,<2.0.0",
     "ulid-py>=1.1.0,<1.2.0",
     "faker>=33.0.0,<34.0.0",
+    "starlette==0.41.3",
 ]
 
 [project.optional-dependencies]

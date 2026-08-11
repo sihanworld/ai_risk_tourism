@@ -1,5 +1,5 @@
 """
-电商风控系统 - 教学场景 XGBoost 演示模型训练 (P4-L4 2026-08-08)
+旅游风控系统 - 教学场景 XGBoost 演示模型训练 (P4-L4 2026-08-08)
 
 【目的】
   不依赖 DB, 纯 numpy 合成 2000 样本, 训练一个针对 30 规则 + 25 特征的合理 XGBoost 模型.
@@ -7,14 +7,14 @@
 
 【为什么需要这个脚本】
   用户的真实 DB 数据是教学造数据 (gen_risk_data_with_dates.py), 正例比例 < 3%, 训出 val_auc ≈ 0.5.
-  这个脚本合成"已知能触发 30 规则"的样本 (高退款率/高投诉/大额/多地址/夜间下单 等),
+  这个脚本合成"已知能触发 30 规则"的样本 (高退款率/高投诉/大额/多地址/夜间预订 等),
   训出针对业务场景的合理模型 (val_auc > 0.85).
 
 【6 种高风险模式】
   1. 高退款率 (refund_rate > 0.3, refund_count > 5)
   2. 高投诉 (complaint_count > 3)
   3. 大额订单 (max_order_amount > 15000)
-  4. 多地址 (addr_province_count > 3)
+  4. 多地址 (trip_city_count > 3)
   5. 夜间高频 (order_is_night=1 + orders_30d 高)
   6. 混合高风险 (上面多种特征都偏高)
 
@@ -73,7 +73,7 @@ def _gen_high_refund_rate(rng: random.Random) -> np.ndarray:
         rng.uniform(5000, 50000), # user_refund_amount
         rng.uniform(0, 5),        # user_cancel_count
         rng.uniform(0, 2),        # user_complaint_count
-        rng.uniform(2, 5),        # user_address_count
+        rng.uniform(2, 5),        # user_trip_city_count
         rng.uniform(200, 5000),   # order_total_amount
         rng.uniform(1, 5),        # order_item_count
         rng.uniform(1, 10),       # order_sku_count
@@ -81,10 +81,10 @@ def _gen_high_refund_rate(rng: random.Random) -> np.ndarray:
         rng.uniform(0, 0.1),      # order_discount_rate
         rng.uniform(60, 3600),    # order_pay_interval_sec
         0.0 if rng.random() < 0.7 else 1.0,  # order_is_night
-        rng.uniform(1, 4),        # order_category_count
-        rng.uniform(2, 5),        # addr_total_count
-        rng.uniform(1, 3),        # addr_province_count
-        0.0 if rng.random() < 0.5 else 1.0,  # addr_is_new
+        rng.uniform(1, 4),        # order_lead_days
+        rng.uniform(2, 5),        # trip_traveler_count
+        rng.uniform(1, 3),        # trip_city_count
+        0.0 if rng.random() < 0.5 else 1.0,  # trip_is_new_traveler
     ], dtype=np.float32)
 
 
@@ -166,7 +166,7 @@ def _gen_multi_address(rng: random.Random) -> np.ndarray:
         rng.uniform(0, 3000),
         rng.uniform(0, 3),
         rng.uniform(0, 2),
-        rng.uniform(5, 10),       # user_address_count  ← 高
+        rng.uniform(5, 10),       # user_trip_city_count  ← 高
         rng.uniform(300, 5000),
         rng.uniform(1, 4),
         rng.uniform(1, 8),
@@ -175,14 +175,14 @@ def _gen_multi_address(rng: random.Random) -> np.ndarray:
         rng.uniform(60, 3600),
         0.0 if rng.random() < 0.5 else 1.0,
         rng.uniform(2, 5),
-        rng.uniform(5, 10),       # addr_total_count  ← 高
-        rng.uniform(3, 7),        # addr_province_count  ← 高
-        0.0 if rng.random() < 0.4 else 1.0,  # addr_is_new
+        rng.uniform(5, 10),       # trip_traveler_count  ← 高
+        rng.uniform(3, 7),        # trip_city_count  ← 高
+        0.0 if rng.random() < 0.4 else 1.0,  # trip_is_new_traveler
     ], dtype=np.float32)
 
 
 def _gen_night_high_freq(rng: random.Random) -> np.ndarray:
-    """模式 5: 夜间高频 (触发 R012 '0-6点下单' / '近期订单激增')"""
+    """模式 5: 夜间高频 (触发 R012 '0-6点预订' / '近期订单激增')"""
     return np.array([
         rng.uniform(10, 40),
         rng.uniform(5, 15),       # user_orders_30d  ← 高
@@ -228,7 +228,7 @@ def _gen_mixed_high_risk(rng: random.Random) -> np.ndarray:
         rng.uniform(2000, 30000),
         rng.uniform(0, 4),
         rng.uniform(1, 6),        # complaint_count 中
-        rng.uniform(3, 8),        # address_count 高
+        rng.uniform(3, 8),        # trip_city_count 高
         rng.uniform(2000, 20000), # order_total_amount 中高
         rng.uniform(1, 6),
         rng.uniform(2, 12),
@@ -239,7 +239,7 @@ def _gen_mixed_high_risk(rng: random.Random) -> np.ndarray:
         rng.uniform(2, 5),
         rng.uniform(3, 8),        # addr_total 高
         rng.uniform(2, 5),        # addr_province 中高
-        0.3 if rng.random() < 0.7 else 1.0,  # addr_is_new 中高
+        0.3 if rng.random() < 0.7 else 1.0,  # trip_is_new_traveler 中高
     ], dtype=np.float32)
 
 
@@ -259,7 +259,7 @@ def _gen_normal_user(rng: random.Random) -> np.ndarray:
         rng.uniform(0, 500),      # user_refund_amount
         rng.uniform(0, 1),        # user_cancel_count
         rng.uniform(0, 1),        # user_complaint_count  ← 低
-        rng.uniform(1, 2),        # user_address_count
+        rng.uniform(1, 2),        # user_trip_city_count
         rng.uniform(0, 1500),     # order_total_amount
         rng.uniform(1, 3),        # order_item_count
         rng.uniform(1, 5),        # order_sku_count
@@ -267,10 +267,10 @@ def _gen_normal_user(rng: random.Random) -> np.ndarray:
         rng.uniform(0, 0.1),      # order_discount_rate
         rng.uniform(120, 7200),   # order_pay_interval_sec (正常)
         0.0 if rng.random() < 0.85 else 1.0,  # order_is_night  ← 大概率白天
-        rng.uniform(1, 3),        # order_category_count
-        rng.uniform(1, 2),        # addr_total_count
-        1.0,                     # addr_province_count  ← 1 个省
-        0.0 if rng.random() < 0.8 else 1.0,  # addr_is_new  ← 大概率老地址
+        rng.uniform(1, 3),        # order_lead_days
+        rng.uniform(1, 2),        # trip_traveler_count
+        1.0,                     # trip_city_count  ← 1 个省
+        0.0 if rng.random() < 0.8 else 1.0,  # trip_is_new_traveler  ← 大概率老地址
     ], dtype=np.float32)
 
 

@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     DB_HOST: str = "localhost"
     DB_PORT: int = 3306
     DB_USER: str = "root"
-    DB_PASSWORD: str = "123321"
+    DB_PASSWORD: str = "123456"
     DB_NAME: str = "ecs"
     TEST_DB_NAME: str = "ecs_test"
 
@@ -41,14 +41,14 @@ class Settings(BaseSettings):
     RISK_MULTI_RULE_BONUS: int = 3     # 多规则命中时, 每条额外规则加的分
     RISK_VETO_MIN_SCORE: int = 90      # 一票否决时强制的最低分
 
-    # 按 event_type 拆的阈值 (P4-L5 2026-08-10):
-    # 售后/物流比下单/支付严 (售后容易薅羊毛, 物流容易虚假签收)
+    # 按 event_type 拆的阈值 (旅游行业 2026-08-11):
+    # 退改签/行程开始 比 预订/支付 严 (退改容易薅羊毛, 行程投诉容易骗退)
     # 找不到 event_type 时 fallback 到全局阈值
     RISK_EVENT_THRESHOLDS: dict[str, dict[str, int]] = {
-        "下单":     {"pass": 30, "mark": 60, "review": 80},   # 标准
+        "预订":     {"pass": 30, "mark": 60, "review": 80},   # 标准
         "支付":     {"pass": 25, "mark": 55, "review": 75},   # 支付更严 (钱的事)
-        "售后申请":  {"pass": 40, "mark": 70, "review": 85},   # 售后更严 (薅羊毛)
-        "物流投诉":  {"pass": 35, "mark": 65, "review": 80},   # 物流偏严
+        "退改签":    {"pass": 40, "mark": 70, "review": 85},   # 退改更严 (薅羊毛)
+        "行程开始":  {"pass": 35, "mark": 65, "review": 80},   # 行程偏严
         "通用":     {"pass": 30, "mark": 60, "review": 80},   # = 全局默认
     }
 
@@ -80,9 +80,9 @@ class Settings(BaseSettings):
         )
 
     # ---- LLM 配置 (阿里云百炼) ----
-    LLM_API_KEY: str = ""
-    LLM_BASE_URL: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-    LLM_MODEL_NAME: str = "qwen-plus"
+    LLM_API_KEY: str = "sk-sp-H.PXRPL.26Cq.MEUCIG2l6M0c8RUx9ar71PqjtDcS9R23Dws133sAUKapOIGQAiEArPxJGJlnKdYzWwppoqThXMFWtHVbzyUlHg-SzzerpEM"
+    LLM_BASE_URL: str = "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1"
+    LLM_MODEL_NAME: str = "qwen3.8-max"
 
     # ---- features 脱敏 (P3-M6) ----
     # True: 响应里 features 返回全量 25 维 (教学/内部 admin 用)

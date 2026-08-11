@@ -1,5 +1,5 @@
 """
-电商风控系统 - FastAPI 路由总入口 (re-export hub)
+旅游风控系统 - FastAPI 路由总入口 (re-export hub)
 30 个路由按业务域拆到 10 个 router 文件 (app/routers/):
 
   - page_router        7 个  页面 (Jinja2 模板, 含 P3-S9 评估历史)

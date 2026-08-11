@@ -298,7 +298,7 @@ async def get_case_detail(db: AsyncSession, case_id: str) -> CaseDetailResponse 
             # DECIMAL → float (JSON 不支持 Decimal 类型)
             "refund_rate": float(profile.refund_rate),
             "avg_order_amount": float(profile.avg_order_amount),
-            "address_count": profile.address_count,
+            "trip_city_count": profile.trip_city_count,
             "complaint_count": profile.complaint_count,
             "assessment_count": profile.assessment_count,
         }
@@ -431,7 +431,7 @@ async def get_user_profile(db: AsyncSession, user_id: str) -> UserProfileRespons
         # DECIMAL 字段要转 float 才能 JSON 序列化
         refund_rate=float(profile.refund_rate),
         avg_order_amount=float(profile.avg_order_amount),
-        address_count=profile.address_count,
+        trip_city_count=profile.trip_city_count,
         complaint_count=profile.complaint_count,
         assessment_count=profile.assessment_count,
         last_assessment_time=profile.last_assessment_time,
@@ -458,7 +458,7 @@ async def list_assessments(
     筛选维度 (可选):
       - decision: 通过 / 标记 / 人工审核 / 拒绝
       - risk_level: 低 / 中 / 高 / 极高
-      - event_type: 下单 / 支付 / 售后申请 / 物流投诉 (JOIN risk_event)
+      - event_type: 预订 / 支付 / 退改签 / 行程开始 (JOIN risk_event)
       - user_id: 精确匹配
 
     注: risk_assessment 表没有 event_type 字段, 要 JOIN risk_event 拿.
@@ -647,7 +647,7 @@ if __name__ == "__main__":
             elif self.call_count == 2:
                 return _R([("待审核", 10), ("审核中", 5), ("已通过", 8), ("已拒绝", 1), ("已关闭", 1)])
             elif self.call_count == 3:
-                return _R([("订单欺诈", 12), ("支付风险", 8), ("账户风险", 5)])
+                return _R([("预订欺诈", 12), ("支付风险", 8), ("账户风险", 5)])
             else:
                 return _R([])
 

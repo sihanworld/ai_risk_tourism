@@ -21,9 +21,9 @@ def _make_case(case_id: str, status: str = "待审核") -> SimpleNamespace:
         assessment_id=f"ast_{case_id}",
         user_id="1001",
         case_status=status,
-        case_category="订单欺诈",
+        case_category="预订欺诈",
         source_id=f"order_{case_id}",
-        event_type="下单",
+        event_type="预订",
         create_time=None,
     )
 

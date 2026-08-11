@@ -1,6 +1,10 @@
-# 电商风控系统 AI_Risk — 项目启动文档
+# 旅游风控系统 AI_Risk — 项目启动文档
 
-> 5 层架构 · 26 张表 · **425 个测试** · 25 维特征 · 30 条规则 · 8 个 AI 工具 · V2 XGBoost 双轨融合 + sigmoid 校准 + 训练数据严格化 + 一条龙命令 + 教学场景训练 + 统一日志 + 一键启动 + 通用分页 + 左侧固定布局 + 训练质量验收 + 最佳 F1 阈值 + RISK 用户参数化生成 + 训练数据校验 + 训练数据生成器正例控制 + 造数据 day_offset 循环回归 + 强制正例比例 + 分页栏粘底 + 分页按钮文字可见 + 脚本 emoji GBK 修复 + 校验函数去重 + 规则可视化构建器 + 规则配置改造 + modal 初始化时机修复 + 条件构建器 grid 布局 + 一次加 1 条件 + stripEmptyLeaves + 删 leaf/group 同步数据 + 根 group 不可删
+> 【2026-08-11 行业迁移】项目已从电商风控迁移至 **场景 A: 旅游 OTA 风控** (酒店/门票预订)。
+> 事件类型: 预订/支付/退改签/行程开始; 规则类别: 预订欺诈/支付风险/账户风险/退改滥用/行程风险/票务风险。
+> 迁移详情见 `旅游行业风控迁移说明.md` 与 `sql/migration_travel_industry.sql`。
+
+> 5 层架构 · 26 张表 · **451 个测试** · 25 维特征 · 30 条规则 · 8 个 AI 工具 · V2 XGBoost 双轨融合 + sigmoid 校准 + 训练数据严格化 + 一条龙命令 + 教学场景训练 + 统一日志 + 一键启动 + 通用分页 + 左侧固定布局 + 训练质量验收 + 最佳 F1 阈值 + RISK 用户参数化生成 + 训练数据校验 + 训练数据生成器正例控制 + 造数据 day_offset 循环回归 + 强制正例比例 + 分页栏粘底 + 分页按钮文字可见 + 脚本 emoji GBK 修复 + 校验函数去重 + 规则可视化构建器 + 规则配置改造 + modal 初始化时机修复 + 条件构建器 grid 布局 + 一次加 1 条件 + stripEmptyLeaves + 删 leaf/group 同步数据 + 根 group 不可删
 >
 > 适用：项目第一次启动 / 老环境升级 / 规则制定 / XGBoost 训练 / 启动服务
 
@@ -44,7 +48,7 @@ pip install -r requirements.txt
 ```bash
 # Docker (推荐)
 docker run -d --name risk-mysql \
-  -e MYSQL_ROOT_PASSWORD=123321 \
+  -e MYSQL_ROOT_PASSWORD=123456 \
   -e MYSQL_DATABASE=ecs \
   -p 3306:3306 \
   mysql:8.0 \
@@ -61,7 +65,7 @@ docker run -d --name risk-mysql \
 DB_HOST=localhost
 DB_PORT=3306
 DB_USER=root
-DB_PASSWORD=123321
+DB_PASSWORD=123456
 DB_NAME=ecs
 TEST_DB_NAME=ecs_test
 
@@ -128,32 +132,33 @@ DDL_CHECK_ENABLED=1 pytest tests/test_ddl_sync.py -v
 
 有 4 个场景，按需选：
 
-### 3.1 大量随机业务数据（10w 条 / 5w 用户 / 30w 订单）
+### 3.1 大量随机业务数据（默认 1w 用户 / 每用户 1-8 笔预订订单）
 
-**默认 10w，可指定**：
+**默认 1w 用户，可指定**：
 ```bash
-# 默认 10w
+# 默认 1w 用户
 python scripts/gen_10w_data.py
 
-# 指定 5w 业务数据
-python scripts/gen_10w_data.py --users 5000 --orders 30000
+# 指定 5000 用户 / 200 个旅游 SKU
+python scripts/gen_10w_data.py --users 5000 --skus 200
 
-# 指定每用户 1-8 单
+# 指定每用户 1-8 单预订
 python scripts/gen_10w_data.py --min-orders 1 --max-orders 8
 ```
 
 **产出**：
 - `N` 用户 (默认 10,000)
-- 每个用户 1-3 个收货地址
-- 每个用户 1-8 笔订单（平均 3）
-- 每笔订单 1-5 个明细
-- 10-20% 概率有售后
-- 5% 概率有物流投诉
+- 每用户 1-6 位出行人/行程 (receive_info)：正常 1-2 位、中风险 2-3 位、高风险 4-6 位（代订黑产特征）
+- 每用户 1-8 笔预订订单（order_info，含 travel_date 出行日期 / travel_persons 出行人数）
+- 每笔订单 1-4 个明细 (order_detail)
+- 订单 × 15% 条退改签申请 (postsale)：退款/改期/退订
+- 订单 × 3% 条行程投诉 (logistics_complaints_record)
+- 120 个旅游 SKU (sku_info)：酒店/门票/跟团游/机票/火车票/租车
 
-**风险画像**（自动注入）：
-- 80% 正常用户
-- 15% 中风险（高退款率 / 多地址）
-- 5% 高风险（大额订单 / 深夜下单 / 极高退款率 90%+）
+**风险画像**（自动注入，由 `--min-orders`/`--max-orders`/风险分层决定）：
+- 80% 正常用户（小额、正常提前期预订、少退改）
+- 15% 中风险（退改率偏高 / 多目的地行程）
+- 5% 高风险（大额预订 / 深夜预订 / 临期代订 / 极高退改率 90%+ / 黄牛囤票式多 SKU 订单）
 
 ### 3.2 业务数据补充（如果 init_db.py 的 4100 条不够用）
 
@@ -167,8 +172,8 @@ python scripts/gen_risk_data.py 100   # 100 条
 python scripts/gen_risk_data.py --count 200 --balance-pos
 ```
 
-从现有订单/售后里随机挑，跑 `process_event()` 7 步流水线，**生成 risk_event / risk_feature / risk_assessment / risk_case 记录**。
-`--balance-pos` 优先抽 `RISK00X` 预置高风险用户（高退款率/高频下单/大额退款/多地址/有投诉），让训练时正例占比 25%~35%。
+从现有订单/退改签里随机挑，跑 `process_event()` 7 步流水线，**生成 risk_event / risk_feature / risk_assessment / risk_case 记录**。
+`--balance-pos` 优先抽 `RISK00X` 预置高风险用户（高退改率/高频预订/高退款金额/多目的地/有投诉），让训练时正例占比 25%~35%。
 
 ### 3.2.1 训练数据严格化（**P4-L4 2026-08-08**）
 
@@ -178,7 +183,7 @@ python scripts/gen_risk_data.py --count 200 --balance-pos
 
 ```bash
 python scripts/gen_train_dataset.py --reset
-# 30 RISK × 25 售后申请 (高风险事件) + 30 普通 × 25 下单 (正常事件) = 1500 条
+# 30 RISK × 25 退改签 (高风险事件) + 30 普通 × 25 预订 (正常事件) = 1500 条
 # 标签: 30 规则跑出 (decision 字段)
 # 特征: 25 维真实从 DB 查 (feature.py)
 # ml_score: 写库后强制 NULL (干净, 避免"未训练模型"垃圾值)
@@ -196,7 +201,7 @@ python scripts/backfill_ml_score.py  # 用训好的模型推理回填
 
 ```bash
 python scripts/train_demo_model.py --n 2000
-# 6 种高风险模式 + 1 种正常模式 (高退款率/高投诉/大额/多地址/夜间/混合 + 普通)
+# 6 种高风险模式 + 1 种正常模式 (高退改率/高投诉/大额/多目的地/夜间/混合 + 普通)
 # 5 秒出结果, val_auc = 1.0 (合成数据太干净, 教学场景够用)
 ```
 
@@ -239,7 +244,7 @@ python scripts/gen_risk_data_with_dates.py --days 7 --per-day 20 --clean
 python scripts/gen_risky_users.py
 ```
 
-生成 5 个 RISK001-RISK005 高风险样本（高退款率 / 高频下单 / 高退款金额 / 多地址 / 有投诉），用于规则引擎单测和前端演示。
+默认生成 5 个 RISK001-RISK005 高风险样本（高退改率 / 高频预订 / 高退款金额 / 多目的地 / 有投诉），每种模式 1 个；用 `--count 30` 可扩到 RISK001-RISK030（每模式 6 个），用于规则引擎单测、训练正例和前端演示。
 
 ---
 
@@ -251,12 +256,15 @@ python scripts/gen_risky_users.py
 
 | 类别 | 数量 | 典型规则 |
 |---|---:|---|
-| 订单欺诈 | 5 | R001 (≥5000 标记) / R002 (≥10000 拒绝, 极高) |
-| 支付风险 | 4 | R006 (7 天 10 单) / R007 (30 天 30 单, 极高) |
-| 账户风险 | 4 | R010 (退款率 ≥30%) / R015 (≥80%, 极高) |
-| 售后滥用 | 3 | R012 (退款次数 ≥5) |
-| 地址风险 | 4 | R017 (多省份) |
-| 物流风险 | 3 | R022 (投诉 ≥3) |
+| 预订欺诈 | 7 | R001 (单笔 ≥8000 标记) / R002 (≥20000 拒绝, 极高) / R006 (临期大额) |
+| 支付风险 | 3 | R008 (极速支付 ≤3 秒) / R010 (深夜高额支付) |
+| 账户风险 | 6 | R011 (退改率 ≥30%) / R012 (≥80% 拒绝, 极高) / R016 (多目的地代订) |
+| 退改滥用 | 4 | R018 (退改 ≥8 次) / R019 (累计退款 ≥10000 拒绝) |
+| 行程风险 | 3 | R021 (行程投诉 ≥2 次标记) / R022 (投诉 ≥5 次审核) |
+| 票务风险 | 7 | R024 (囤票 ≥10 张) / R025 (≥20 张拒绝, 极高) / R029 (新出行人大额) |
+
+- **一票否决规则**（分数 ≥85 且 action=拒绝）：R002 / R004 / R012 / R019 / R025 / R030
+- **黑名单预置**：3 条手机号 (13900009999/13711112222/13633334444, 代订黑产/黄牛/骗退) + 2 条用户 (U_BLACK_001/U_BLACK_002)
 
 ### 4.2 规则 JSON 结构
 
@@ -285,7 +293,7 @@ INSERT INTO risk_rule (
   rule_id, rule_name, rule_category, event_type,
   rule_condition, risk_level, risk_score, action, is_enabled, priority, description
 ) VALUES (
-  'R025', '我的新规则', '订单欺诈', '下单',
+  'R031', '我的新规则', '预订欺诈', '预订',
   '{"field": "order_total_amount", "op": ">=", "value": 3000}',
   '高', 60, '人工审核', 1, 50,
   '单笔订单 ≥3000 触发审核'
@@ -299,10 +307,10 @@ INSERT INTO risk_rule (
 curl -X POST http://localhost:8000/api/rules \
   -H "Content-Type: application/json" \
   -d '{
-    "rule_id": "R025",
+    "rule_id": "R031",
     "rule_name": "我的新规则",
-    "rule_category": "订单欺诈",
-    "event_type": "下单",
+    "rule_category": "预订欺诈",
+    "event_type": "预订",
     "rule_condition": {"field": "order_total_amount", "op": ">=", "value": 3000},
     "risk_level": "高",
     "risk_score": 60,
@@ -319,7 +327,7 @@ curl http://localhost:8000/api/rules
 
 ```sql
 -- 单条
-UPDATE risk_rule SET deleted_at = NOW() WHERE rule_id = 'R025';
+UPDATE risk_rule SET deleted_at = NOW() WHERE rule_id = 'R031';
 
 -- 查未软删
 SELECT * FROM risk_rule WHERE deleted_at IS NULL;
@@ -524,10 +532,10 @@ INFO:     Started reloader process
 curl -X POST http://localhost:8000/api/risk/check \
   -H "Content-Type: application/json" \
   -d '{
-    "event_type": "下单",
-    "source_id": "ORD_TEST_001",
-    "user_id": "1001",
-    "order_id": "ORD_TEST_001"
+    "event_type": "预订",
+    "source_id": "ORD_001_01",
+    "user_id": "RISK001",
+    "order_id": "ORD_001_01"
   }'
 ```
 
@@ -822,7 +830,7 @@ python scripts/main.py
 - 脚本：`scripts/` (8 个脚本, 含 gen_10w_data / gen_risk_data_with_dates / migrate_2026_08_07)
 - DDL/SQL：`sql/` (6 个 DDL + 3 个 migration)
 - 文档：`docs/` (含 11 份教学 md, 新增 `agent_design.md` 介绍 8 @tool 设计)
-- 测试：`tests/` (425 cases, 含 P4-L3 案件超时关闭 + XGBoost 特征重要性 + XGBoost 训练优化 4 个 + XGBoost 训练质量验收 6 个 (假收敛检测 + 最佳 F1 阈值) + P4-L4 统一日志 13 个 + 一键启动 preflight 16 个 + scheduler bug 回归 1 个 + 通用分页 9 个 + 左侧固定布局 10 个 (含分页栏粘底 2 个 + 分页按钮文字可见 1 个) + train 脚本解包顺序回归 1 个 + RISK 用户参数化生成 8 个 + 训练数据校验 6 个 (条数/pos 比例/时间跨度) + 训练数据生成器正例控制 12 个 (`--balance-pos` / `--target-pos-ratio` / `--live` / `--force-pos-ratio` 参数 + 正例统计 + 比例提示 + day_offset 循环回归 + 3 个高风险 picker + retry 机制 + 脚本 emoji GBK 修复 + decision_hit 引用清理) + 前端 ML 评分 sigmoid 校准 21 个 + 一条龙命令 13 个 + 教学场景训练 11 个 + 训练数据严格化 15 个 + sigmoid 校准 15 个 + ML 风险检查页 7 个 + 物流投诉 picker bug 修复 4 个 + P4-L5 校验去重 15 个 (死代码删除 + 决策引擎重复调用清理) + P4-L5 黑名单 4 action 14 个 (manage_blacklist 字典派发按 action 动态传参 + 移除走 case.remove_blacklist 软删 + 边界签名锁定) + P4-L5 撞黑短路 UI 提示 12 个 (RiskCheckResponse.message 字段 + _blacklist_reject 填 message + 前端判断 blacklist_reject 不渲染 ML 块)
+- 测试：`tests/` (451 cases, 含 P4-L3 案件超时关闭 + XGBoost 特征重要性 + XGBoost 训练优化 4 个 + XGBoost 训练质量验收 6 个 (假收敛检测 + 最佳 F1 阈值) + P4-L4 统一日志 13 个 + 一键启动 preflight 16 个 + scheduler bug 回归 1 个 + 通用分页 9 个 + 左侧固定布局 10 个 (含分页栏粘底 2 个 + 分页按钮文字可见 1 个) + train 脚本解包顺序回归 1 个 + RISK 用户参数化生成 8 个 + 训练数据校验 6 个 (条数/pos 比例/时间跨度) + 训练数据生成器正例控制 12 个 (`--balance-pos` / `--target-pos-ratio` / `--live` / `--force-pos-ratio` 参数 + 正例统计 + 比例提示 + day_offset 循环回归 + 3 个高风险 picker + retry 机制 + 脚本 emoji GBK 修复 + decision_hit 引用清理) + 前端 ML 评分 sigmoid 校准 21 个 + 一条龙命令 13 个 + 教学场景训练 11 个 + 训练数据严格化 15 个 + sigmoid 校准 15 个 + ML 风险检查页 7 个 + 行程投诉 picker bug 修复 4 个 + P4-L5 校验去重 15 个 (死代码删除 + 决策引擎重复调用清理) + P4-L5 黑名单 4 action 14 个 (manage_blacklist 字典派发按 action 动态传参 + 移除走 case.remove_blacklist 软删 + 边界签名锁定) + P4-L5 撞黑短路 UI 提示 12 个 (RiskCheckResponse.message 字段 + _blacklist_reject 填 message + 前端判断 blacklist_reject 不渲染 ML 块)
 + P4-L5 规则配置改造 30 个 (RISK_LEVEL_SCORE_MAP 区间一致性 + RISK_EVENT_THRESHOLDS 按 event_type 拆 + validate_rule_score_level 互验 + 前端 25 特征 + 可视化构建器 + rules.html 改造)
 + P4-L5 modal 初始化时机修复 14 个 (buildConditionUI 放到 shown.bs.modal 事件回调 + showCreateModal/editRule 同步 + try-catch 兜底 + app.js 25 特征 10 op 锁住)
 + P4-L5 条件构建器布局优化 + 删同步 29 个 (modal-xl 1140px + cond-leaf grid 4 列布局 + + 条件一次加 1 行 + 默认 1 空条件 + stripEmptyLeaves + 删 leaf/group 同步数据 (window._CURRENT_COND + removeCondFromTree) + 根 group 不可删 + 删完能重新 + 分组))

@@ -23,7 +23,7 @@ class TestBlacklistRejectResponse:
         """_blacklist_reject 必须填 message 字段, 前端直接显示."""
         from app.schemas import RiskCheckRequest
         req = RiskCheckRequest(
-            event_type="下单", source_id="ORD001", user_id="U001", order_id="ORD001",
+            event_type="预订", source_id="ORD001", user_id="U001", order_id="ORD001",
         )
         resp = event_module._blacklist_reject(req, "用户")
         assert resp.message is not None, "撞黑响应必须有 message 字段"
@@ -32,7 +32,7 @@ class TestBlacklistRejectResponse:
     def test_blacklist_reject_has_blocked_by(self):
         from app.schemas import RiskCheckRequest
         req = RiskCheckRequest(
-            event_type="下单", source_id="ORD001", user_id="U001", order_id="ORD001",
+            event_type="预订", source_id="ORD001", user_id="U001", order_id="ORD001",
         )
         resp = event_module._blacklist_reject(req, "地址")
         assert resp.blocked_by == "地址"
@@ -41,7 +41,7 @@ class TestBlacklistRejectResponse:
         """撞黑场景 ml_score 必须 None (前端不渲染 ML 块, 避免'未加载模型'误导)."""
         from app.schemas import RiskCheckRequest
         req = RiskCheckRequest(
-            event_type="下单", source_id="ORD001", user_id="U001", order_id="ORD001",
+            event_type="预订", source_id="ORD001", user_id="U001", order_id="ORD001",
         )
         resp = event_module._blacklist_reject(req, "手机号")
         assert resp.ml_score is None
@@ -51,7 +51,7 @@ class TestBlacklistRejectResponse:
         """assessment_id='blacklist_reject' 是前端判断撞黑短路的标志."""
         from app.schemas import RiskCheckRequest
         req = RiskCheckRequest(
-            event_type="下单", source_id="ORD001", user_id="U001", order_id="ORD001",
+            event_type="预订", source_id="ORD001", user_id="U001", order_id="ORD001",
         )
         resp = event_module._blacklist_reject(req, "用户")
         assert resp.assessment_id == "blacklist_reject"
@@ -61,7 +61,7 @@ class TestBlacklistRejectResponse:
         """撞黑不跑 7 步, 所以 rule_count=0, triggered_rules=[]."""
         from app.schemas import RiskCheckRequest
         req = RiskCheckRequest(
-            event_type="下单", source_id="ORD001", user_id="U001", order_id="ORD001",
+            event_type="预订", source_id="ORD001", user_id="U001", order_id="ORD001",
         )
         resp = event_module._blacklist_reject(req, "用户")
         assert resp.rule_count == 0
@@ -119,7 +119,7 @@ class TestRiskCheckPageBlacklistHint:
 
     @pytest.fixture
     def html(self):
-        path = Path("D:/workroom/尚硅谷大模型项目之风控系统/3.代码/AI_Risk/templates/risk_check.html")
+        path = Path(__file__).resolve().parent.parent / "templates" / "risk_check.html"
         return path.read_text(encoding="utf-8")
 
     def test_risk_check_html_references_message(self, html):
@@ -152,7 +152,7 @@ class TestBlacklistResponseShape:
         """撞黑响应必须包含的字段: decision / final_score / blocked_by / message / ml_score=null."""
         from app.schemas import RiskCheckRequest
         req = RiskCheckRequest(
-            event_type="下单", source_id="ORD001", user_id="U001", order_id="ORD001",
+            event_type="预订", source_id="ORD001", user_id="U001", order_id="ORD001",
         )
         resp = event_module._blacklist_reject(req, "用户")
         # 响应转 dict 看完整字段

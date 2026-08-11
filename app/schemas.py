@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 
 class RiskCheckRequest(BaseModel):
     """风险检查请求"""
-    event_type: Literal["下单", "支付", "售后申请", "物流投诉"]
+    event_type: Literal["预订", "支付", "退改签", "行程开始"]
     source_id: str = Field(description="关联业务ID (order_id / postsale_id 等)")
     user_id: str
     order_id: Optional[str] = None
@@ -63,8 +63,8 @@ class RuleCreate(BaseModel):
     """创建规则请求"""
     rule_id: str = Field(max_length=50)
     rule_name: str = Field(max_length=100)
-    rule_category: Literal["订单欺诈", "支付风险", "账户风险", "售后滥用", "地址风险", "物流风险"]
-    event_type: Literal["下单", "支付", "售后申请", "物流投诉", "通用"] = "通用"
+    rule_category: Literal["预订欺诈", "支付风险", "账户风险", "退改滥用", "行程风险", "票务风险"]
+    event_type: Literal["预订", "支付", "退改签", "行程开始", "通用"] = "通用"
     rule_condition: dict
     risk_level: Literal["低", "中", "高", "极高"]
     risk_score: int = Field(ge=0, le=100)
@@ -76,8 +76,8 @@ class RuleCreate(BaseModel):
 class RuleUpdate(BaseModel):
     """更新规则请求 (所有字段可选)"""
     rule_name: Optional[str] = None
-    rule_category: Optional[Literal["订单欺诈", "支付风险", "账户风险", "售后滥用", "地址风险", "物流风险"]] = None
-    event_type: Optional[Literal["下单", "支付", "售后申请", "物流投诉", "通用"]] = None
+    rule_category: Optional[Literal["预订欺诈", "支付风险", "账户风险", "退改滥用", "行程风险", "票务风险"]] = None
+    event_type: Optional[Literal["预订", "支付", "退改签", "行程开始", "通用"]] = None
     rule_condition: Optional[dict] = None
     risk_level: Optional[Literal["低", "中", "高", "极高"]] = None
     risk_score: Optional[int] = Field(default=None, ge=0, le=100)
@@ -276,7 +276,7 @@ class UserProfileResponse(BaseModel):
     total_refunds: int = 0
     refund_rate: float = 0
     avg_order_amount: float = 0
-    address_count: int = 0
+    trip_city_count: int = 0
     complaint_count: int = 0
     assessment_count: int = 0
     last_assessment_time: Optional[datetime] = None
@@ -313,9 +313,9 @@ if __name__ == "__main__":
 
     # 1. RiskCheckRequest — 入口 (前端"风险检查"页触发)
     req = RiskCheckRequest(
-        event_type="下单", source_id="ord_demo_001", user_id="U0001",
+        event_type="预订", source_id="ord_demo_001", user_id="U0001",
         order_id="ord_demo_001", receive_id="rec_001",
-        event_data={"amount": 5000, "category": "电子产品"},
+        event_data={"amount": 5000, "category": "酒店"},
     )
     print("\n[1] RiskCheckRequest (入口):")
     print(req.model_dump_json(indent=2))
@@ -323,15 +323,15 @@ if __name__ == "__main__":
     # 2. RuleHitInfo + RiskCheckResponse — 7 步流水线返回
     hits = [
         RuleHitInfo(
-            rule_id="R002", rule_name="单笔极端高额订单",
-            rule_category="订单欺诈", risk_level="极高",
-            risk_score=95, action="拒绝",
-            description="单笔订单实付金额≥10000元, 一票否决",
+            rule_id="R002", rule_name="超高额预订拦截",
+            rule_category="预订欺诈", risk_level="极高",
+            risk_score=90, action="拒绝",
+            description="单笔预订金额≥20000元, 疑似盗刷或代订黑产, 一票否决",
         ),
         RuleHitInfo(
-            rule_id="R005", rule_name="高折扣率订单",
-            rule_category="订单欺诈", risk_level="高",
-            risk_score=65, action="人工审核",
+            rule_id="R024", rule_name="大批量购票",
+            rule_category="票务风险", risk_level="高",
+            risk_score=70, action="人工审核",
         ),
     ]
     resp = RiskCheckResponse(
@@ -354,7 +354,7 @@ if __name__ == "__main__":
     # 3. AssessmentDetailResponse (P3-S9) — 评估历史详情
     detail = AssessmentDetailResponse(
         assessment_id="ast_demo_xxx", event_id="evt_demo_xxx",
-        user_id="U0001", event_type="下单", event_source_id="ord_demo_001",
+        user_id="U0001", event_type="预订", event_source_id="ord_demo_001",
         final_score=95, risk_level="极高", decision="拒绝",
         rule_count=2, triggered_rules=hits,
         create_time=datetime.now(),

@@ -12,9 +12,9 @@ from app.service import event as event_module
 
 
 def _make_request(**overrides) -> RiskCheckRequest:
-    """构造一个 RiskCheckRequest, 默认值是"下单/1001/order_001/receive_001"."""
+    """构造一个 RiskCheckRequest, 默认值是"预订/1001/order_001/receive_001"."""
     base = dict(
-        event_type="下单",
+        event_type="预订",
         source_id="order_001",
         user_id="1001",
         order_id="order_001",

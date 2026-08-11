@@ -4,13 +4,18 @@
 - 用 node.js 在 sub-process 跑 JS (项目纯 Python 后端, 没有 JS 运行时)
 """
 import json
+import shutil
 import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 # Add project root to sys.path
 ROOT = Path(__file__).resolve().parent.parent
 APP_JS = ROOT / "static" / "app.js"
+
+_NODE = shutil.which("node")
 
 
 def _run_js(expr: str) -> str:
@@ -18,6 +23,8 @@ def _run_js(expr: str) -> str:
 
     用 node.js 评估 buildPaginationHtml 函数.
     """
+    if not _NODE:
+        pytest.skip("node.js 未安装, 跳过 JS 运行时测试")
     # 包一层: 加载 app.js, 移除 module 包装, 然后 eval 表达式
     js_code = (
         "const window = {}; const document = {getElementById: () => ({innerHTML: ''})};\n"
@@ -26,7 +33,7 @@ def _run_js(expr: str) -> str:
         + "process.stdout.write(result || '');\n"
     )
     r = subprocess.run(
-        ["node", "-e", js_code],
+        [_NODE, "-e", js_code],
         capture_output=True, text=True, encoding="utf-8", timeout=10,
     )
     if r.returncode != 0:

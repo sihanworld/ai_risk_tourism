@@ -1,5 +1,15 @@
 {% extends "base.html" %}
-{% block title %}仪表盘 - 电商风控系统{% endblock %}
+{% block title %}仪表盘 - 旅游风控系统{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* [2026-08-11 修复] base.html 的 .row { margin: 0 !important } 会清掉 Bootstrap 的 mb-4,
+       导致图表卡片 (近7天评估趋势 / 规则命中 TOP5) 紧贴上方统计卡片发生视觉碰撞.
+       id 选择器优先级高于 class, 显式给图表行补回顶部间距 */
+    #chart-row { margin-top: 1.5rem !important; }
+</style>
+{% endblock %}
+
 {% block content %}
 <h4 class="mb-4">风控仪表盘</h4>
 
@@ -32,7 +42,7 @@
 </div>
 
 <!-- 图表 -->
-<div class="row">
+<div class="row" id="chart-row">
     <div class="col-md-8">
         <div class="card stat-card p-3">
             <h6>近7天评估趋势</h6>

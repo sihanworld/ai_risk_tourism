@@ -1,5 +1,5 @@
 """
-电商风控系统 - 一条龙命令 (P4-L4 2026-08-08)
+旅游风控系统 - 一条龙命令 (P4-L4 2026-08-08)
 从零开始, 一键完成所有准备 + 训练, 最后启动 Web 服务.
 
 【工作流 6 步】
@@ -106,7 +106,7 @@ def step_6_business_today() -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="电商风控系统 - 一条龙命令 (6 步: 重置 → RISK → 训练数据 → 训练 → 回填 → 启动)",
+        description="旅游风控系统 - 一条龙命令 (6 步: 重置 → RISK → 训练数据 → 训练 → 回填 → 启动)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 示例:
@@ -125,7 +125,7 @@ def main() -> None:
     args = parser.parse_args()
 
     print("=" * 70)
-    print("电商风控系统 - 一条龙命令 (6 步全流程)")
+    print("旅游风控系统 - 一条龙命令 (6 步全流程)")
     print("=" * 70)
     print(f"工作目录: {ROOT}")
     print(f"Python:    {sys.executable}")

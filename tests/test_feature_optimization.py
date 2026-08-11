@@ -161,7 +161,7 @@ class TestComputeUserFeaturesOptimization:
                 "_feat_user_total_amount", "_feat_user_max_order_amount",
                 "_feat_user_refund_count", "_feat_user_postsale_count",
                 "_feat_user_refund_amount", "_feat_user_cancel_count",
-                "_feat_user_complaint_count", "_feat_user_address_count",
+                "_feat_user_complaint_count", "_feat_user_trip_city_count",
             ]:
                 mp.setattr(feature_module, fn_name, fake_independent)
             # refund_rate / postsale_rate 内部还会调 _feat_user_total_orders / _feat_user_refund_count 等

@@ -49,7 +49,7 @@ def _generate_id(prefix: str = "") -> str:
 def _score_to_level(score: int, event_type: str = "通用") -> str:
     """评分 → 风险等级. 阈值按 event_type 拆, 找不到 fallback 到全局默认.
 
-    教学场景下售后比下单严 (RISK_EVENT_THRESHOLDS 表里售后阈值更高).
+    教学场景下退改签比预订严 (RISK_EVENT_THRESHOLDS 表里退改签阈值更高).
     业务方调阈值不用动代码, 改 config.py 的 RISK_EVENT_THRESHOLDS 即可.
     """
     th = settings.get_event_thresholds(event_type)
@@ -100,7 +100,8 @@ def calculate_final_score(hits: list[RuleHitResult]) -> int:
 def check_veto(hits: list[RuleHitResult]) -> bool:
     """一票否决: 任意 1 条 risk_level="极高" 就 True, 短路返回.
 
-    当前项目"极高"级别 3 条规则: R002 (单笔 10000+) / R007 (30 天 30 单) / R015 (退款率 80%+).
+    当前项目"极高"级别规则 (旅游行业): R002 超高额预订 / R004 极端预订频率 /
+    R012 极高退改率 / R019 退款金额过大 / R025 超大量购票 / R030 高频高额代订.
     """
     return any(h.risk_level == "极高" for h in hits)
 
@@ -123,12 +124,12 @@ def _build_context(request: RiskCheckRequest) -> _RiskCheckContext:
     """步骤 1b: 请求 → Context, 顺便补全 order_id.
 
     业务规则:
-      - "下单" / "支付" 事件: source_id 就是 order_id
-      - "售后申请" 事件: source_id 是 postsale_id, order_id 要从 request 传
-      - "物流投诉" 事件: source_id 是 complaints_id
+      - "预订" / "支付" 事件: source_id 就是 order_id
+      - "退改签" 事件: source_id 是 postsale_id, order_id 要从 request 传
+      - "行程开始" 事件: source_id 是 complaints_id
     """
     order_id = request.order_id
-    if not order_id and request.event_type in ("下单", "支付"):
+    if not order_id and request.event_type in ("预订", "支付"):
         order_id = request.source_id
     return _RiskCheckContext(
         request=request,
@@ -139,9 +140,9 @@ def _build_context(request: RiskCheckRequest) -> _RiskCheckContext:
 
 
 async def _enrich_receive_id(db: AsyncSession, ctx: _RiskCheckContext) -> None:
-    """步骤 1c: 从订单里补全 receive_id (地址 ID).
+    """步骤 1c: 从订单里补全 receive_id (出行人/行程信息 ID).
 
-    退出条件 (任一满足就不补): 已有 receive_id / 没有 order_id (售后/物流投诉场景).
+    退出条件 (任一满足就不补): 已有 receive_id / 没有 order_id (退改签/行程开始场景).
     """
     if ctx.receive_id or not ctx.order_id:
         return
@@ -176,22 +177,22 @@ def _create_event_record(db: AsyncSession, ctx: _RiskCheckContext) -> str:
 # ============================================================
 
 async def _compute_features(db: AsyncSession, ctx: _RiskCheckContext) -> dict:
-    """步骤 3: 调 feature.py 计算 25 个风控特征 (用户/订单/地址 3 类)"""
+    """步骤 3: 调 feature.py 计算 25 个风控特征 (用户/订单/行程 3 类)"""
     return await compute_all_features(
         db,
         user_id=ctx.user_id,
-        order_id=ctx.order_id,        # 可能 None (售后场景只算用户+地址)
+        order_id=ctx.order_id,        # 可能 None (退改签场景只算用户+行程)
         receive_id=ctx.receive_id,
     )
 
 
 def _classify_feature_entity(feature_name: str) -> tuple[str, str]:
-    """特征名前缀 → 实体类型. user_* → 用户, order_* → 订单, 其他 → 地址"""
+    """特征名前缀 → 实体类型. user_* → 用户, order_* → 订单, 其他 → 行程"""
     if feature_name.startswith("user_"):
         return "用户", feature_name
     if feature_name.startswith("order_"):
         return "订单", feature_name
-    return "地址", feature_name
+    return "行程", feature_name
 
 
 def _save_feature_snapshot(
@@ -204,7 +205,7 @@ def _save_feature_snapshot(
     entity_id 填充规则 (按 entity_type):
       - 用户特征 → ctx.user_id
       - 订单特征 → ctx.order_id (缺失用 source_id 顶替)
-      - 地址特征 → ctx.receive_id (缺失用 user_id 顶替)
+      - 行程特征 → ctx.receive_id (缺失用 user_id 顶替)
     """
     for fname, fval in features.items():
         entity_type, _ = _classify_feature_entity(fname)
@@ -212,7 +213,7 @@ def _save_feature_snapshot(
             entity_id = ctx.user_id
         elif entity_type == "订单":
             entity_id = ctx.order_id or ctx.request.source_id
-        else:  # 地址
+        else:  # 行程
             entity_id = ctx.receive_id or ctx.user_id
         db.add(RiskFeature(
             event_id=ctx.event_id,
@@ -481,7 +482,7 @@ async def _update_user_profile(
         if total_orders > 0 else 0
     )
     profile.avg_order_amount = features.get("user_avg_order_amount", 0)
-    profile.address_count = int(features.get("user_address_count", 0))
+    profile.trip_city_count = int(features.get("user_trip_city_count", 0))
     profile.complaint_count = int(features.get("user_complaint_count", 0))
     # 累计评估次数 +1 (or 0 兜底, 防止新建时 None)
     profile.assessment_count = (profile.assessment_count or 0) + 1

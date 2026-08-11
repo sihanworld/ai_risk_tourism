@@ -25,9 +25,9 @@ ALTERS = [
     ("risk_blacklist", "deleted_at",
      "DATETIME DEFAULT NULL COMMENT '软删除时间(NULL=未删, P3-M9)' AFTER create_time"),
     ("risk_case", "source_id",
-     "VARCHAR(50) DEFAULT NULL COMMENT '原始业务ID(订单/售后/投诉ID), 重做检查时用' AFTER risk_detail"),
+     "VARCHAR(50) DEFAULT NULL COMMENT '原始业务ID(订单/退改签/投诉ID), 重做检查时用' AFTER risk_detail"),
     ("risk_case", "event_type",
-     "ENUM('下单', '支付', '售后申请', '物流投诉') DEFAULT NULL COMMENT '触发案件的事件类型' AFTER source_id"),
+     "ENUM('预订', '支付', '退改签', '行程开始') DEFAULT NULL COMMENT '触发案件的事件类型' AFTER source_id"),
 ]
 
 INDEX_ALTERS = [

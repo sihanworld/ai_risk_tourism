@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}风险检查 - 电商风控系统{% endblock %}
+{% block title %}风险检查 - 旅游风控系统{% endblock %}
 {% block content %}
 <h4 class="mb-4">风险检查</h4>
 
@@ -12,10 +12,10 @@
                 <div class="mb-3">
                     <label class="form-label"><span class="text-danger">*</span> 事件类型</label>
                     <select class="form-select" id="ck_event_type" required>
-                        <option value="下单">下单</option>
+                        <option value="预订">预订</option>
                         <option value="支付">支付</option>
-                        <option value="售后申请">售后申请</option>
-                        <option value="物流投诉">物流投诉</option>
+                        <option value="退改签">退改签</option>
+                        <option value="行程开始">行程开始</option>
                     </select>
                 </div>
                 <div class="mb-3">
@@ -23,11 +23,11 @@
                     <input type="text" class="form-control" id="ck_user_id" placeholder="如: 1001" required>
                 </div>
                 <div class="mb-3">
-                    <label class="form-label"><span class="text-danger">*</span> 业务ID (订单号/售后ID)</label>
+                    <label class="form-label"><span class="text-danger">*</span> 业务ID (预订订单号/退改签ID)</label>
                     <input type="text" class="form-control" id="ck_source_id" placeholder="如: ord05a5ac8c8cfe4f51" required>
                 </div>
                 <div class="mb-3">
-                    <label class="form-label">订单ID (可选, 下单/支付时自动填充)</label>
+                    <label class="form-label">订单ID (可选, 预订/支付时自动填充)</label>
                     <input type="text" class="form-control" id="ck_order_id">
                 </div>
                 <button type="submit" class="btn btn-primary w-100" id="checkBtn">

@@ -57,14 +57,14 @@ class TestGenRiskyUsersLogic:
     """gen_risky_users 函数逻辑 (不连真实 DB, 测函数 + 模式轮换)."""
 
     def test_five_risk_modes_defined(self):
-        """5 种风险模式必须定义: 高退款率/高频下单/高退款金额/多地址/有投诉."""
+        """5 种风险模式必须定义: 高退改率/高频预订/高退款金额/多目的地/有投诉."""
         sys.path.insert(0, str(ROOT))
         from scripts import gen_risky_users
         # 模式名 (5 个, 对应 RISK_MODES 列表)
         assert len(gen_risky_users.RISK_MODES) == 5, (
             f"应 5 种风险模式, 实际 {len(gen_risky_users.RISK_MODES)}"
         )
-        expected = ["高退款率", "高频下单", "高退款金额", "多地址", "有投诉"]
+        expected = ["高退改率", "高频预订", "高退款金额", "多目的地", "有投诉"]
         assert gen_risky_users.RISK_MODES == expected, (
             f"模式名变化会破坏向后兼容, 当前 {gen_risky_users.RISK_MODES}"
         )

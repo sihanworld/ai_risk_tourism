@@ -9,6 +9,7 @@ P4-L4 2026-08-08: 前端 ML 评分 sigmoid 校准统一展示测试
 """
 import json
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -23,9 +24,13 @@ CASES_HTML = ROOT / "templates" / "cases.html"
 SCHEMAS = ROOT / "app" / "schemas.py"
 SERVICE_CASE = ROOT / "app" / "service" / "case.py"
 
+_NODE = shutil.which("node")
+
 
 def _run_js(expr: str) -> str:
     """跑 JS 表达式, 返回 stdout 字符串."""
+    if not _NODE:
+        pytest.skip("node.js 未安装, 跳过 JS 运行时测试")
     js_code = (
         "const window = {}; const document = {getElementById: () => ({innerHTML: ''})};\n"
         + APP_JS.read_text(encoding="utf-8")
@@ -33,7 +38,7 @@ def _run_js(expr: str) -> str:
         + "process.stdout.write(result === null || result === undefined ? 'null' : String(result));\n"
     )
     r = subprocess.run(
-        ["node", "-e", js_code],
+        [_NODE, "-e", js_code],
         capture_output=True, text=True, encoding="utf-8", timeout=10,
     )
     if r.returncode != 0:

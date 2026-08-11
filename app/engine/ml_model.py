@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 # 固定 25 维特征顺序 (训练和推理都用这个顺序, 防 dict 顺序不一致导致特征错位)
 # 改这个列表前必须同步: feature.py::compute_user_features / compute_order_features
-# / compute_address_features / tests/test_xgboost.py::test_feature_columns_align
+# / compute_trip_features / tests/test_xgboost.py::test_feature_columns_align
 # 对不齐会让 XGBoost 训练/推理退化成 0 填充, 业务上相当于模型没工作
 FEATURE_COLUMNS: list[str] = [
     "user_total_orders",
@@ -41,7 +41,7 @@ FEATURE_COLUMNS: list[str] = [
     "user_refund_amount",
     "user_cancel_count",
     "user_complaint_count",
-    "user_address_count",
+    "user_trip_city_count",
     "order_total_amount",
     "order_item_count",
     "order_sku_count",
@@ -49,10 +49,10 @@ FEATURE_COLUMNS: list[str] = [
     "order_discount_rate",
     "order_pay_interval_sec",
     "order_is_night",
-    "order_category_count",
-    "addr_total_count",
-    "addr_province_count",
-    "addr_is_new",
+    "order_lead_days",
+    "trip_traveler_count",
+    "trip_city_count",
+    "trip_is_new_traveler",
 ]
 
 assert len(FEATURE_COLUMNS) == 25, f"特征数量必须是 25, 当前 {len(FEATURE_COLUMNS)}"
@@ -425,11 +425,11 @@ if __name__ == "__main__":
         "user_max_order_amount": 3000,
         "user_refund_count": 0, "user_refund_rate": 0.0, "user_refund_amount": 0,
         "user_postsale_count": 0, "user_postsale_rate": 0.0,
-        "user_cancel_count": 0, "user_complaint_count": 0, "user_address_count": 1,
+        "user_cancel_count": 0, "user_complaint_count": 0, "user_trip_city_count": 1,
         "order_total_amount": 1500, "order_item_count": 1, "order_sku_count": 1,
         "order_discount_amount": 0, "order_discount_rate": 0.0,
-        "order_pay_interval": 30, "order_is_night": 0, "order_category_count": 1,
-        "addr_total_count": 1, "addr_province_count": 1, "addr_is_new": 0,
+        "order_pay_interval_sec": 30, "order_is_night": 0, "order_lead_days": 12,
+        "trip_traveler_count": 1, "trip_city_count": 1, "trip_is_new_traveler": 0,
     }
     arr = _features_to_array(sample)
     print(f"  shape           = {arr.shape}  (期望 (1, 25))")

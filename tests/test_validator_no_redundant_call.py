@@ -136,7 +136,7 @@ class TestProcessEventCallsValidatorOnce:
 
         # 6. 跑
         request = RiskCheckRequest(
-            event_type="下单", source_id="ORD001", user_id="U001", order_id="ORD001"
+            event_type="预订", source_id="ORD001", user_id="U001", order_id="ORD001"
         )
         await event_module.process_event(db, request)
 

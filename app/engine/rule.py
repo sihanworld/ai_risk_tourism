@@ -176,13 +176,13 @@ if __name__ == "__main__":
     test_cases = [
         # (描述, 条件, 特征, 期望)
         ("基础 >=",         {"field": "order_total_amount", "op": ">=", "value": 5000}, {"order_total_amount": 8000}, True),
-        ("基础 ==",         {"field": "addr_is_new", "op": "==", "value": 1},            {"addr_is_new": 1},            True),
+        ("基础 ==",         {"field": "trip_is_new_traveler", "op": "==", "value": 1},   {"trip_is_new_traveler": 1},   True),
         ("基础 !=",         {"field": "user_total_orders", "op": "!=", "value": 0},     {"user_total_orders": 5},      True),
         ("AND 嵌套 (R030)", {"and": [
             {"field": "user_refund_rate", "op": ">=", "value": 0.5},
             {"field": "user_avg_order_amount", "op": ">=", "value": 2000},
-            {"field": "user_address_count", "op": ">=", "value": 3},
-        ]}, {"user_refund_rate": 0.6, "user_avg_order_amount": 3000, "user_address_count": 5}, True),
+            {"field": "user_trip_city_count", "op": ">=", "value": 3},
+        ]}, {"user_refund_rate": 0.6, "user_avg_order_amount": 3000, "user_trip_city_count": 5}, True),
         ("OR 嵌套",         {"or": [
             {"field": "user_total_orders", "op": ">=", "value": 100},
             {"field": "user_total_orders", "op": "<", "value": 1},

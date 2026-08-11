@@ -17,22 +17,22 @@ class TestForcePickerSourceId:
     """force 模式 3 个 picker 的 source_id 必须跟 validator 校验对得上"""
 
     def test_logistics_complaint_source_id_no_prefix(self):
-        """物流投诉 picker 不能拼 COMP_ 前缀, 必须用原始 record_id (整数转字符串)."""
+        """行程投诉 picker 不能拼 COMP_ 前缀, 必须用原始 record_id (整数转字符串)."""
         src = SCRIPT_PATH.read_text(encoding="utf-8")
         assert 'source_id=f"COMP_' not in src, (
-            "物流投诉 picker 不能再用 f\"COMP_{rec_id}\" 拼字符串, "
+            "行程投诉 picker 不能再用 f\"COMP_{rec_id}\" 拼字符串, "
             "validator 强转 int() 会 ValueError"
         )
         assert 'source_id=str(rec_id)' in src, (
-            "物流投诉 picker 应直接用 record_id, 写 source_id=str(rec_id)"
+            "行程投诉 picker 应直接用 record_id, 写 source_id=str(rec_id)"
         )
 
     def test_all_three_force_pickers_in_script(self):
         """3 个 force picker 都应在脚本中定义."""
         src = SCRIPT_PATH.read_text(encoding="utf-8")
-        assert '"售后申请", _pick_forced_postsale' in src, "应有售后 picker"
-        assert '"物流投诉", _pick_forced_logistics_complaint' in src, "应有物流投诉 picker"
-        assert '"下单", _pick_forced_order_for_high_amount' in src, "应有高额订单 picker"
+        assert '"退改签", _pick_forced_postsale' in src, "应有退改签 picker"
+        assert '"行程开始", _pick_forced_logistics_complaint' in src, "应有行程投诉 picker"
+        assert '"预订", _pick_forced_order_for_high_amount' in src, "应有高额订单 picker"
         assert src.count("RiskCheckRequest(") >= 3, "3 个 picker 都应构造 RiskCheckRequest"
 
     def test_logistics_complaint_record_id_is_bigint(self):
@@ -47,7 +47,7 @@ class TestForcePickerSourceId:
 
     def test_validator_caster_matches_record_id_type(self):
         """validator 强转 int() 必须跟 record_id 类型 (整数) 对得上."""
-        # validator.py: ("物流投诉",): (LogisticsComplaintsRecord, "record_id", int, ...)
+        # validator.py: ("行程开始",): (LogisticsComplaintsRecord, "record_id", int, ...)
         # source_id=str(rec_id) → "123" → int("123") = 123 OK
         # source_id=f"COMP_{rec_id}" → "COMP_123" → int("COMP_123") ValueError
         src = SCRIPT_PATH.read_text(encoding="utf-8")

@@ -18,7 +18,7 @@ import re
 import pytest
 from pathlib import Path
 
-PROJECT_ROOT = Path("D:/workroom/尚硅谷大模型项目之风控系统/3.代码/AI_Risk")
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
 RULES_HTML = PROJECT_ROOT / "templates" / "rules.html"
 APP_JS = PROJECT_ROOT / "static" / "app.js"
 

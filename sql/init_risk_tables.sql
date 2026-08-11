@@ -1,6 +1,8 @@
 -- ============================================
--- 电商风控系统 - 风控表 DDL 初始化脚本
+-- 旅游风控系统 - 风控表 DDL 初始化脚本
 -- 在 ecs 数据库中创建 7 张新增风控表
+-- 【旅游行业】事件类型: 预订/支付/退改签/行程开始
+-- 【旅游行业】规则类别: 预订欺诈/支付风险/账户风险/退改滥用/行程风险/票务风险
 -- ============================================
 
 USE ecs;
@@ -9,8 +11,8 @@ USE ecs;
 CREATE TABLE IF NOT EXISTS `risk_rule` (
     `rule_id` VARCHAR(50) NOT NULL COMMENT '规则ID',
     `rule_name` VARCHAR(100) NOT NULL COMMENT '规则名称',
-    `rule_category` ENUM('订单欺诈','支付风险','账户风险','售后滥用','地址风险','物流风险') NOT NULL COMMENT '风险场景分类',
-    `event_type` ENUM('下单','支付','售后申请','物流投诉','通用') NOT NULL DEFAULT '通用' COMMENT '适用事件类型',
+    `rule_category` ENUM('预订欺诈','支付风险','账户风险','退改滥用','行程风险','票务风险') NOT NULL COMMENT '风险场景分类',
+    `event_type` ENUM('预订','支付','退改签','行程开始','通用') NOT NULL DEFAULT '通用' COMMENT '适用事件类型',
     `rule_condition` JSON NOT NULL COMMENT '条件表达式',
     `risk_level` ENUM('低','中','高','极高') NOT NULL COMMENT '风险等级',
     `risk_score` INT NOT NULL COMMENT '命中分值(0-100)',
@@ -28,7 +30,7 @@ CREATE TABLE IF NOT EXISTS `risk_rule` (
 -- 2. 风控事件审计表
 CREATE TABLE IF NOT EXISTS `risk_event` (
     `event_id` VARCHAR(50) NOT NULL COMMENT '事件ID',
-    `event_type` ENUM('下单','支付','售后申请','物流投诉') NOT NULL COMMENT '事件类型',
+    `event_type` ENUM('预订','支付','退改签','行程开始') NOT NULL COMMENT '事件类型',
     `event_source_id` VARCHAR(50) NOT NULL COMMENT '关联业务ID',
     `user_id` VARCHAR(50) NOT NULL COMMENT '用户ID',
     `event_data` JSON COMMENT '事件快照',
@@ -42,7 +44,7 @@ CREATE TABLE IF NOT EXISTS `risk_event` (
 CREATE TABLE IF NOT EXISTS `risk_feature` (
     `feature_id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '特征ID',
     `event_id` VARCHAR(50) NOT NULL COMMENT '关联事件ID',
-    `entity_type` ENUM('用户','订单','地址') NOT NULL COMMENT '实体类型',
+    `entity_type` ENUM('用户','订单','行程','票券') NOT NULL COMMENT '实体类型',
     `entity_id` VARCHAR(50) NOT NULL COMMENT '实体ID',
     `feature_name` VARCHAR(100) NOT NULL COMMENT '特征名称',
     `feature_value` DECIMAL(15,4) COMMENT '特征值',
@@ -82,8 +84,8 @@ CREATE TABLE IF NOT EXISTS `risk_case` (
     `risk_detail` JSON COMMENT '风险详情',
     -- 【2026-08-07 补】业务回溯字段: decision.py 写入, "重做检查" 按钮回查用
     -- 之前漏在 DDL 里, 导致 ORM 查 risk_case.source_id 时报 1054 (修复: 合并自原 migration_add_case_source_id.sql)
-    `source_id` VARCHAR(50) DEFAULT NULL COMMENT '原始业务ID(订单/售后/投诉ID), 重做检查时用',
-    `event_type` ENUM('下单','支付','售后申请','物流投诉') DEFAULT NULL COMMENT '触发案件的事件类型',
+    `source_id` VARCHAR(50) DEFAULT NULL COMMENT '原始业务ID(预订订单/退改签/行程投诉ID), 重做检查时用',
+    `event_type` ENUM('预订','支付','退改签','行程开始') DEFAULT NULL COMMENT '触发案件的事件类型',
     `reviewer` VARCHAR(50) DEFAULT NULL COMMENT '审核人',
     `review_comment` TEXT COMMENT '审核意见',
     `review_time` DATETIME DEFAULT NULL COMMENT '审核时间',
@@ -114,12 +116,12 @@ CREATE TABLE IF NOT EXISTS `risk_user_profile` (
     `user_id` VARCHAR(50) NOT NULL COMMENT '用户ID',
     `risk_score` INT DEFAULT 0 COMMENT '综合风险评分(0-100)',
     `risk_level` ENUM('低','中','高','极高') DEFAULT '低' COMMENT '风险等级',
-    `total_orders` INT DEFAULT 0 COMMENT '总订单数',
-    `total_refunds` INT DEFAULT 0 COMMENT '退款次数',
+    `total_orders` INT DEFAULT 0 COMMENT '总预订订单数',
+    `total_refunds` INT DEFAULT 0 COMMENT '退款/退订次数',
     `refund_rate` DECIMAL(5,4) DEFAULT 0 COMMENT '退款率',
     `avg_order_amount` DECIMAL(10,2) DEFAULT 0 COMMENT '平均订单金额',
-    `address_count` INT DEFAULT 0 COMMENT '地址数量',
-    `complaint_count` INT DEFAULT 0 COMMENT '投诉次数',
+    `trip_city_count` INT DEFAULT 0 COMMENT '出行目的地城市数量',
+    `complaint_count` INT DEFAULT 0 COMMENT '行程投诉次数',
     `assessment_count` INT DEFAULT 0 COMMENT '评估次数',
     `last_assessment_time` DATETIME DEFAULT NULL COMMENT '最近评估时间',
     `profile_data` JSON COMMENT '扩展画像数据',

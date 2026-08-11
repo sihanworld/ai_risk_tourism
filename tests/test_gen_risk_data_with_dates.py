@@ -79,11 +79,11 @@ class TestGenRiskDataForcedPosLogic:
     """--force-pos-ratio 配套函数 + 逻辑验证."""
 
     def test_force_pos_pickers_defined(self):
-        """3 个高风险 picker 必须存在: 售后 / 物流投诉 / 高额订单."""
+        """3 个高风险 picker 必须存在: 退改签 / 行程投诉 / 高额订单."""
         script = SCRIPT_PATH.read_text(encoding="utf-8")
         # 3 个 _pick_forced_* 函数
-        assert "_pick_forced_postsale" in script, "必须有 _pick_forced_postsale (RISK 售后)"
-        assert "_pick_forced_logistics_complaint" in script, "必须有 _pick_forced_logistics_complaint (物流投诉)"
+        assert "_pick_forced_postsale" in script, "必须有 _pick_forced_postsale (RISK 退改签)"
+        assert "_pick_forced_logistics_complaint" in script, "必须有 _pick_forced_logistics_complaint (行程投诉)"
         assert "_pick_forced_order_for_high_amount" in script, "必须有 _pick_forced_order_for_high_amount (高额订单)"
 
     def test_force_pos_retry_logic(self):

@@ -1,5 +1,5 @@
 """
-电商风控系统 - ORM 模型总入口 (re-export hub)
+旅游风控系统 - ORM 模型总入口 (re-export hub)
 包含 17 张业务表 + 7 张风控表的 SQLAlchemy 2.x 映射
 
 

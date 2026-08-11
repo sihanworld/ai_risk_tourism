@@ -1,5 +1,5 @@
 """
-电商风控系统 - 风控表 ORM (7 张)
+旅游风控系统 - 风控表 ORM (7 张)
 风控系统自建表, 跟业务表分开管理
 - 规则配置 (RiskRule)
 - 事件审计 (RiskEvent / RiskFeature / RiskAssessment)
@@ -39,12 +39,12 @@ class RiskRule(Base):
     rule_id: Mapped[str] = mapped_column(String(50), primary_key=True, comment="规则ID")
     rule_name: Mapped[str] = mapped_column(String(100), nullable=False, comment="规则名称")
     rule_category: Mapped[str] = mapped_column(
-        Enum("订单欺诈", "支付风险", "账户风险", "售后滥用", "地址风险", "物流风险",
+        Enum("预订欺诈", "支付风险", "账户风险", "退改滥用", "行程风险", "票务风险",
              name="rule_category_enum"),
         nullable=False, comment="风险场景分类",
     )
     event_type: Mapped[str] = mapped_column(
-        Enum("下单", "支付", "售后申请", "物流投诉", "通用", name="rule_event_type_enum"),
+        Enum("预订", "支付", "退改签", "行程开始", "通用", name="rule_event_type_enum"),
         nullable=False, server_default="通用", comment="适用事件类型",
     )
     rule_condition: Mapped[str] = mapped_column(Text, nullable=False, comment="条件表达式(JSON)")
@@ -90,7 +90,7 @@ class RiskEvent(Base):
 
     event_id: Mapped[str] = mapped_column(String(50), primary_key=True, comment="事件ID")
     event_type: Mapped[str] = mapped_column(
-        Enum("下单", "支付", "售后申请", "物流投诉", name="event_type_enum"),
+        Enum("预订", "支付", "退改签", "行程开始", name="event_type_enum"),
         nullable=False, comment="事件类型",
     )
     event_source_id: Mapped[str] = mapped_column(String(50), nullable=False, comment="关联业务ID")
@@ -112,7 +112,7 @@ class RiskFeature(Base):
     feature_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True, comment="特征ID")
     event_id: Mapped[str] = mapped_column(String(50), nullable=False, comment="关联事件ID")
     entity_type: Mapped[str] = mapped_column(
-        Enum("用户", "订单", "地址", name="feature_entity_type_enum"),
+        Enum("用户", "订单", "行程", "票券", name="feature_entity_type_enum"),
         nullable=False, comment="实体类型",
     )
     entity_id: Mapped[str] = mapped_column(String(50), nullable=False, comment="实体ID")
@@ -185,9 +185,9 @@ class RiskCase(Base):
     review_comment: Mapped[Optional[str]] = mapped_column(Text, comment="审核意见")
     review_time: Mapped[Optional[datetime]] = mapped_column(DateTime, comment="审核时间")
     # --- 业务回溯字段 (重做检查时使用) ---
-    source_id: Mapped[Optional[str]] = mapped_column(String(50), comment="原始业务ID(订单/售后/投诉ID)")
+    source_id: Mapped[Optional[str]] = mapped_column(String(50), comment="原始业务ID(预订订单/退改签/行程投诉ID)")
     event_type: Mapped[Optional[str]] = mapped_column(
-        Enum("下单", "支付", "售后申请", "物流投诉", name="case_event_type_enum"),
+        Enum("预订", "支付", "退改签", "行程开始", name="case_event_type_enum"),
         comment="触发案件的事件类型",
     )
     create_time: Mapped[Optional[datetime]] = mapped_column(
@@ -242,12 +242,12 @@ class RiskUserProfile(Base):
         Enum("低", "中", "高", "极高", name="profile_risk_level_enum"),
         default="低", comment="风险等级",
     )
-    total_orders: Mapped[int] = mapped_column(Integer, default=0, comment="总订单数")
-    total_refunds: Mapped[int] = mapped_column(Integer, default=0, comment="退款次数")
+    total_orders: Mapped[int] = mapped_column(Integer, default=0, comment="总预订订单数")
+    total_refunds: Mapped[int] = mapped_column(Integer, default=0, comment="退款/退订次数")
     refund_rate: Mapped[Decimal] = mapped_column(Numeric(5, 4), default=0, comment="退款率")
     avg_order_amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0, comment="平均订单金额")
-    address_count: Mapped[int] = mapped_column(Integer, default=0, comment="地址数量")
-    complaint_count: Mapped[int] = mapped_column(Integer, default=0, comment="投诉次数")
+    trip_city_count: Mapped[int] = mapped_column(Integer, default=0, comment="出行目的地城市数量")
+    complaint_count: Mapped[int] = mapped_column(Integer, default=0, comment="行程投诉次数")
     assessment_count: Mapped[int] = mapped_column(Integer, default=0, comment="评估次数")
     last_assessment_time: Mapped[Optional[datetime]] = mapped_column(DateTime, comment="最近评估时间")
     profile_data: Mapped[Optional[str]] = mapped_column(Text, comment="扩展画像数据(JSON)")

@@ -1,6 +1,6 @@
 """
-电商风控系统 - 模拟风控评估数据生成 (异步)
-从现有业务数据中随机选取订单/售后/用户，调用风控引擎生成评估记录
+旅游风控系统 - 模拟风控评估数据生成 (异步)
+从现有业务数据中随机选取订单/退改签/用户，调用风控引擎生成评估记录
 用于填充仪表盘和案件管理页面的初始数据
 
 P4-L3 2026-08-08 新增 --balance-pos:
@@ -55,7 +55,7 @@ async def _pick_order(db, balance_pos: bool) -> tuple | None:
 
 
 async def _pick_postsale(db, balance_pos: bool) -> tuple | None:
-    """挑一条售后; balance_pos=True 时优先从 RISK 高风险用户里选."""
+    """挑一条退改签; balance_pos=True 时优先从 RISK 高风险用户里选."""
     if balance_pos:
         if random.random() < 0.8:
             r = await db.execute(text("""
@@ -106,7 +106,7 @@ async def generate_risk_data(count: int = 30, balance_pos: bool = False, target_
             success = 0
             pos_count = 0
             for i in range(count):
-                # balance_pos 时更倾向用售后 (高退款率用户)
+                # balance_pos 时更倾向用退改签 (高退款率用户)
                 ps_odds = 0.6 if balance_pos else 0.3
                 use_postsale = random.random() < ps_odds
                 if use_postsale:
@@ -117,15 +117,15 @@ async def generate_risk_data(count: int = 30, balance_pos: bool = False, target_
                         # 【P4-L3 第二轮】target 模式下, 持续造数据直到达标
                         if target_pos_ratio is not None:
                             continue
-                        print(f"  [{i+1}/{count}] 没有可用售后/订单, 跳过")
+                        print(f"  [{i+1}/{count}] 没有可用退改签/订单, 跳过")
                         continue
                     ps_id, user_id = picked
                     request = RiskCheckRequest(
-                        event_type="售后申请",
+                        event_type="退改签",
                         source_id=ps_id,
                         user_id=user_id,
                     )
-                    tag = "售后"
+                    tag = "退改签"
                 else:
                     picked = await _pick_order(db, balance_pos)
                     if not picked:
@@ -134,7 +134,7 @@ async def generate_risk_data(count: int = 30, balance_pos: bool = False, target_
                         print(f"  [{i+1}/{count}] 没有可用订单, 跳过")
                         continue
                     order_id, user_id, receive_id = picked
-                    event_type = random.choice(["下单", "下单", "下单", "支付", "支付"])
+                    event_type = random.choice(["预订", "预订", "预订", "支付", "支付"])
                     request = RiskCheckRequest(
                         event_type=event_type,
                         source_id=order_id,

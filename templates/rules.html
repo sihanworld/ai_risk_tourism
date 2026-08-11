@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}规则管理 - 电商风控系统{% endblock %}
+{% block title %}规则管理 - 旅游风控系统{% endblock %}
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h4 class="mb-0">规则管理</h4>
@@ -12,12 +12,12 @@
 <div class="mb-3 d-flex gap-2 align-items-center flex-wrap">
     <select class="form-select form-select-sm w-auto" id="filterCategory" onchange="loadRules(1)">
         <option value="">全部分类</option>
-        <option value="订单欺诈">订单欺诈</option>
+        <option value="预订欺诈">预订欺诈</option>
         <option value="支付风险">支付风险</option>
         <option value="账户风险">账户风险</option>
-        <option value="售后滥用">售后滥用</option>
-        <option value="地址风险">地址风险</option>
-        <option value="物流风险">物流风险</option>
+        <option value="退改滥用">退改滥用</option>
+        <option value="行程风险">行程风险</option>
+        <option value="票务风险">票务风险</option>
     </select>
     <span class="text-muted small">每页</span>
     <select class="form-select form-select-sm w-auto" id="pageSize" onchange="onPageSizeChange()">
@@ -70,12 +70,12 @@
                         <div class="col-md-4">
                             <label class="form-label">分类</label>
                             <select class="form-select" id="f_category" required>
-                                <option value="订单欺诈">订单欺诈</option>
+                                <option value="预订欺诈">预订欺诈</option>
                                 <option value="支付风险">支付风险</option>
                                 <option value="账户风险">账户风险</option>
-                                <option value="售后滥用">售后滥用</option>
-                                <option value="地址风险">地址风险</option>
-                                <option value="物流风险">物流风险</option>
+                                <option value="退改滥用">退改滥用</option>
+                                <option value="行程风险">行程风险</option>
+                                <option value="票务风险">票务风险</option>
                             </select>
                         </div>
                     </div>
@@ -84,24 +84,27 @@
                             <label class="form-label">事件类型</label>
                             <select class="form-select" id="f_event_type">
                                 <option value="通用">通用</option>
-                                <option value="下单">下单</option>
+                                <option value="预订">预订</option>
                                 <option value="支付">支付</option>
-                                <option value="售后申请">售后申请</option>
-                                <option value="物流投诉">物流投诉</option>
+                                <option value="退改签">退改签</option>
+                                <option value="行程开始">行程开始</option>
                             </select>
                         </div>
                         <div class="col-md-3">
                             <label class="form-label">风险等级</label>
                             <select class="form-select" id="f_risk_level" required onchange="autoFillScoreByLevel()">
-                                <option value="低">低</option>
-                                <option value="中">中</option>
-                                <option value="高">高</option>
-                                <option value="极高">极高</option>
+                                <option value="低">低 (0-29分)</option>
+                                <option value="中">中 (30-59分)</option>
+                                <option value="高">高 (60-84分)</option>
+                                <option value="极高">极高 (85-100分)</option>
                             </select>
+                            <small class="text-muted" style="font-size: 11px;">切换等级自动校正分值</small>
                         </div>
                         <div class="col-md-3">
                             <label class="form-label">分值 (0-100)</label>
-                            <input type="number" class="form-control" id="f_score" min="0" max="100" required>
+                            <input type="number" class="form-control" id="f_score" min="0" max="100" required
+                                   oninput="autoFillLevelByScore()">
+                            <small class="text-muted" style="font-size: 11px;">修改分值自动校正等级</small>
                         </div>
                         <div class="col-md-3">
                             <label class="form-label">动作</label>
@@ -111,6 +114,14 @@
                                 <option value="人工审核">人工审核</option>
                                 <option value="拒绝">拒绝</option>
                             </select>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-12" id="scoreLevelMismatchHint" style="display:none;">
+                            <div class="alert alert-warning py-2 px-3 mb-0 small">
+                                <i class="bi bi-exclamation-triangle"></i>
+                                该规则原有分值与风险等级不匹配，已按分值自动修正风险等级，请核对后保存。
+                            </div>
                         </div>
                     </div>
                     <div class="mb-3">
@@ -244,6 +255,7 @@ function showCreateModal() {
     editingRuleId = null;
     document.getElementById('ruleModalTitle').textContent = '新建规则';
     document.getElementById('ruleForm').reset();
+    document.getElementById('scoreLevelMismatchHint').style.display = 'none';  // [2026-08-11] 清掉编辑遗留的不匹配提示
     document.getElementById('f_rule_id').disabled = false;
     // [P4-L5 2026-08-11] 强制重置条件编辑模式为 builder (清掉上次可能留在 JSON 模式的 textarea)
     _condMode = 'builder';
@@ -292,6 +304,16 @@ async function editRule(ruleId) {
     document.getElementById('f_risk_level').value = r.risk_level;
     document.getElementById('f_score').value = r.risk_score;
     document.getElementById('f_action').value = r.action;
+    // [2026-08-11] 历史脏数据兼容: 若库里分值与风险等级不匹配 (如 90 分对应低风险),
+    // 打开弹窗时按分值自动修正风险等级并显示黄色提示, 避免保存出自相矛盾的规则
+    const _mismatchHint = document.getElementById('scoreLevelMismatchHint');
+    const _scoreNum = Number(r.risk_score);
+    if (r.risk_score != null && !isNaN(_scoreNum) && !validateScoreLevel(r.risk_level, _scoreNum).ok) {
+        document.getElementById('f_risk_level').value = getRiskLevelByScore(_scoreNum);
+        _mismatchHint.style.display = '';
+    } else {
+        _mismatchHint.style.display = 'none';
+    }
     // [P4-L5 2026-08-11] 同步条件 JSON 到 JSON 编辑器 textarea (跟可视化模式共享同一份数据)
     document.getElementById('f_condition').value = JSON.stringify(r.rule_condition, null, 2);
     document.getElementById('f_priority').value = r.priority;
@@ -392,12 +414,41 @@ async function deleteRule(ruleId) {
 }
 
 
-// [P4-L5 2026-08-10] 选风险等级时自动算分数 (取区间中位数), 用户可改
+// [P4-L5 2026-08-10] 选风险等级时自动算分数; [2026-08-11] 升级为双向联动 (等级 → 分值):
+//   - 分值已在该等级区间内: 保持不动, 不打扰用户
+//   - 分值越界: 就近钳位到区间边界 (如 25分·低 → 切极高, 自动变为 85)
+//   - 分值为空: 填区间中位数
 function autoFillScoreByLevel() {
+    hideScoreLevelHint();
     const level = document.getElementById('f_risk_level').value;
     const [low, high] = RISK_LEVEL_SCORE_MAP[level] || [0, 100];
-    const mid = Math.round((low + high) / 2);
-    document.getElementById('f_score').value = mid;
+    const scoreInput = document.getElementById('f_score');
+    const cur = parseInt(scoreInput.value, 10);
+    if (scoreInput.value === '' || isNaN(cur)) {
+        scoreInput.value = Math.round((low + high) / 2);
+    } else if (cur < low) {
+        scoreInput.value = low;
+    } else if (cur > high) {
+        scoreInput.value = high;
+    }
+}
+
+// [2026-08-11] 双向联动 (分值 → 等级): 分值变化时按区间自动反查风险等级
+// (低 0-29 / 中 30-59 / 高 60-84 / 极高 85-100), 区间定义与 app/core/config.py 保持一致
+function autoFillLevelByScore() {
+    hideScoreLevelHint();
+    const raw = document.getElementById('f_score').value;
+    if (raw === '') return;
+    let score = parseInt(raw, 10);
+    if (isNaN(score)) return;
+    score = Math.max(0, Math.min(100, score));
+    document.getElementById('f_risk_level').value = getRiskLevelByScore(score);
+}
+
+// [2026-08-11] 隐藏"分值与等级不匹配"提示条 (用户开始手动调整即视为已确认)
+function hideScoreLevelHint() {
+    const el = document.getElementById('scoreLevelMismatchHint');
+    if (el) el.style.display = 'none';
 }
 
 // [P4-L5 2026-08-11] 条件表达式 2 种编辑模式: 可视化构建器 / JSON 文本

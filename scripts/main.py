@@ -1,5 +1,5 @@
 """
-电商风控系统 - 应用入口
+旅游风控系统 - 应用入口
 启动 FastAPI 服务，注册所有路由和中间件
 """
 # 将项目根目录加入 Python 路径
@@ -48,8 +48,8 @@ async def lifespan(app: FastAPI):
     app.state.scheduler_running = False
 
 app = FastAPI(
-    title="电商风控系统",
-    description="基于规则引擎 + AI Agent 的电商平台风险控制系统",
+    title="旅游风控系统",
+    description="基于规则引擎 + AI Agent 的旅游 OTA 平台风险控制系统",
     version="1.0.0",
     lifespan=lifespan,
 )

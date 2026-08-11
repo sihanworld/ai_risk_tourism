@@ -18,7 +18,7 @@ assessment_router = APIRouter(prefix="/api/assessments", tags=["评估历史"])
 async def api_list_assessments(
     decision: str = Query(None, description="决策: 通过/标记/人工审核/拒绝"),
     risk_level: str = Query(None, description="等级: 低/中/高/极高"),
-    event_type: str = Query(None, description="事件: 下单/支付/售后申请/物流投诉"),
+    event_type: str = Query(None, description="事件: 预订/支付/退改签/行程开始"),
     user_id: str = Query(None, description="精确匹配用户ID"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),

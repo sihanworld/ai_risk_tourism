@@ -1,5 +1,5 @@
 """
-业务实体校验器: 集中处理"用户/订单/售后"等业务实体的存在性、一致性校验.
+业务实体校验器: 集中处理"用户/预订订单/退改签"等业务实体的存在性、一致性校验.
 所有校验失败都抛 HTTPException, 由 FastAPI 统一返回 4xx 响应.
 """
 import asyncio
@@ -83,9 +83,9 @@ async def ensure_order_belongs_to_user(
 
 # source_id 与 event_type 匹配的校验规则 (字典派发, 加新 event_type 只加 1 行)
 _EVENT_SOURCE_VALIDATORS = {
-    ("下单", "支付"): (OrderInfo, "order_id", None, "订单", 400),
-    ("售后申请",): (Postsale, "postsale_id", None, "售后单", 400),
-    ("物流投诉",): (LogisticsComplaintsRecord, "record_id", int, "投诉记录", 400),
+    ("预订", "支付"): (OrderInfo, "order_id", None, "订单", 400),
+    ("退改签",): (Postsale, "postsale_id", None, "退改签单", 400),
+    ("行程开始",): (LogisticsComplaintsRecord, "record_id", int, "投诉记录", 400),
 }
 
 
@@ -164,7 +164,7 @@ if __name__ == "__main__":
 
     # 3. ensure_source_matches_event_type: event_type 不匹配 → 400
     print("\n[3] ensure_source_matches_event_type 行为:")
-    print("  event_type='下单' 但用 postsale_id 当 source_id → 报错 (派发错模型)")
+    print("  event_type='预订' 但用 postsale_id 当 source_id → 报错 (派发错模型)")
 
     async def demo_event_dispatch():
         # mock: 同时支持 .scalar() (给 ensure_exists) 和 .scalar_one_or_none() (给 ensure_order_belongs_to_user)
@@ -180,16 +180,16 @@ if __name__ == "__main__":
                 return _R(self.count_n, self.row)
 
         from app.schemas import RiskCheckRequest
-        req_ok = RiskCheckRequest(event_type="下单", source_id="ORD001", user_id="U001")
+        req_ok = RiskCheckRequest(event_type="预订", source_id="ORD001", user_id="U001")
         # count=1 (存在), row 也有 (单条订单)
         try:
             await ensure_source_matches_event_type(_FlexDB(1, SimpleNamespace(order_id="ORD001")), req_ok)
-            print("  [OK]   event_type=下单 + source_id=ORD001 → OrderInfo 存在, 通过")
+            print("  [OK]   event_type=预订 + source_id=ORD001 → OrderInfo 存在, 通过")
         except HTTPException as e:
             print(f"  [FAIL] {e.detail}")
 
-        # 错误配对: 用 postsale_id 当 source_id 但 event_type=下单 → 走 OrderInfo 但查不到
-        req_bad = RiskCheckRequest(event_type="下单", source_id="PS001", user_id="U001")
+        # 错误配对: 用 postsale_id 当 source_id 但 event_type=预订 → 走 OrderInfo 但查不到
+        req_bad = RiskCheckRequest(event_type="预订", source_id="PS001", user_id="U001")
         try:
             await ensure_source_matches_event_type(_FlexDB(0, None), req_bad)
             print("  [FAIL] 不该到这里")
@@ -246,8 +246,8 @@ async def validate_risk_check_request(
     # 2. source_id 与事件类型匹配
     await ensure_source_matches_event_type(db, request)
 
-    # 3. 下单/支付场景: 校验订单归属 (防绕过)
-    if request.event_type in ("下单", "支付"):
+    # 3. 预订/支付场景: 校验订单归属 (防绕过)
+    if request.event_type in ("预订", "支付"):
         # order_id 优先用请求里传的, 没传就用 source_id (业务约定)
         order_id = request.order_id or request.source_id
         await ensure_order_belongs_to_user(db, order_id, request.user_id)

@@ -20,6 +20,22 @@ import sys
 os.environ["PYTHONIOENCODING"] = "utf-8"
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+# 【旅游行业迁移 2026-08-11】把 .env 加载进 os.environ,
+# 让下方自检的 os.getenv("DB_PASSWORD"/"DB_USER"/"DB_NAME") 能读到真实配置
+def _load_dotenv() -> None:
+    env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+    if not os.path.exists(env_path):
+        return
+    with open(env_path, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            k, v = line.split("=", 1)
+            os.environ.setdefault(k.strip(), v.strip().strip('"').strip("'"))
+
+_load_dotenv()
+
 
 # ============================================================
 # 启动前自检
@@ -69,7 +85,7 @@ def _check_mysql_alive() -> tuple[str, str]:
     """检查 MySQL 是否在 localhost:3306 跑. 用 socket 探测, 不依赖 pymysql."""
     import pymysql
     from app.config import settings as _  # 加载 .env 配置
-    password = os.getenv("DB_PASSWORD", "123321")
+    password = os.getenv("DB_PASSWORD", "123456")
     user = os.getenv("DB_USER", "root")
     db = os.getenv("DB_NAME", "ecs")
     try:
@@ -90,7 +106,7 @@ def _check_db_initialized() -> tuple[str, str]:
     """检查数据库是否已初始化 (risk_rule 表能查)."""
     try:
         import pymysql
-        password = os.getenv("DB_PASSWORD", "123321")
+        password = os.getenv("DB_PASSWORD", "123456")
         user = os.getenv("DB_USER", "root")
         db = os.getenv("DB_NAME", "ecs")
         conn = pymysql.connect(

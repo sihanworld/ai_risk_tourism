@@ -116,7 +116,7 @@ class TestRuleRouterHook:
 
         data = RuleCreate(
             rule_id="R_TEST", rule_name="测试规则",
-            rule_category="订单欺诈", event_type="下单",
+            rule_category="预订欺诈", event_type="预订",
             rule_condition={"field": "x", "op": ">", "value": 5},
             risk_level="高", risk_score=70, action="人工审核",
         )

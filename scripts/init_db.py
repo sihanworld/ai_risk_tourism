@@ -1,5 +1,5 @@
 """
-电商风控系统 - 一键数据库初始化脚本 (异步)
+旅游风控系统 - 一键数据库初始化脚本 (异步)
 按顺序执行所有 SQL 脚本: 创建数据库 → 业务表 → 业务数据 → 风控表 → 风控规则
 
 总表数: 17 业务 + 9 风控 = 26 张 (2026-08-07 含 P4 2 张: risk_action_log + risk_alert)
@@ -30,7 +30,7 @@ SQL_FILES = [
 DEFAULT_HOST = "localhost"
 DEFAULT_PORT = 3306
 DEFAULT_USER = "root"
-DEFAULT_PASSWORD = "123321"
+DEFAULT_PASSWORD = "123456"
 DEFAULT_DB = "ecs"
 
 
@@ -176,7 +176,7 @@ def split_sql_statements(sql_text):
 
 async def main():
     parser = argparse.ArgumentParser(
-        description="电商风控系统 - 一键数据库初始化 (异步). 默认 --reset 重置整个数据库",
+        description="旅游风控系统 - 一键数据库初始化 (异步). 默认 --reset 重置整个数据库",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 用法:
@@ -217,7 +217,7 @@ async def main():
         args.reset = True
 
     print("=" * 60)
-    print("电商风控系统 - 数据库初始化 (异步)")
+    print("旅游风控系统 - 数据库初始化 (异步)")
     print(f"目标: {args.user}@{args.host}:{args.port}/{args.db}")
     print(f"模式: {'[RESET] 先删后建' if args.reset else '[KEEP-DATA] 保留数据, 只补表'}")
     print("=" * 60)

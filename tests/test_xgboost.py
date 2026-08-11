@@ -27,13 +27,13 @@ class TestFeatureColumns:
         assert len(ml_model.FEATURE_COLUMNS) == 25
 
     def test_feature_prefixes(self):
-        """14 user_* + 8 order_* + 3 addr_* (align with feature.py naming)"""
+        """14 user_* + 8 order_* + 3 trip_* (align with feature.py naming)"""
         user = [c for c in ml_model.FEATURE_COLUMNS if c.startswith("user_")]
         order = [c for c in ml_model.FEATURE_COLUMNS if c.startswith("order_")]
-        addr = [c for c in ml_model.FEATURE_COLUMNS if c.startswith("addr_")]
+        trip = [c for c in ml_model.FEATURE_COLUMNS if c.startswith("trip_")]
         assert len(user) == 14, f"user features should be 14, got {len(user)}"
         assert len(order) == 8, f"order features should be 8, got {len(order)}"
-        assert len(addr) == 3, f"addr features should be 3, got {len(addr)}"
+        assert len(trip) == 3, f"trip features should be 3, got {len(trip)}"
 
     def test_features_to_array(self):
         """dict -> 1x25 ndarray, missing filled with 0, string -> float"""
@@ -41,7 +41,7 @@ class TestFeatureColumns:
             "user_total_orders": 10,         # 0
             "user_orders_30d": 3,            # 1
             # intentionally omit 22 middle keys -> 0
-            "addr_is_new": 0,                # 24 (last in FEATURE_COLUMNS)
+            "trip_is_new_traveler": 0,                # 24 (last in FEATURE_COLUMNS)
         }
         arr = ml_model._features_to_array(features)
         assert arr.shape == (1, 25)
@@ -59,7 +59,7 @@ class TestFeatureColumns:
         causing XGBoost train/inference degraded to 0-imputation" bug (found 2026-08-07).
         If feature.py renames/reorders features, must sync this list.
         """
-        # 14 user + 8 order + 3 addr, aligned with feature.py's 3 feat_funcs dict order
+        # 14 user + 8 order + 3 trip, aligned with feature.py's 3 feat_funcs dict order
         expected = [
             # --- 14 user features (compute_user_features) ---
             "user_total_orders",
@@ -75,7 +75,7 @@ class TestFeatureColumns:
             "user_refund_amount",
             "user_cancel_count",
             "user_complaint_count",
-            "user_address_count",
+            "user_trip_city_count",
             # --- 8 order features (compute_order_features) ---
             "order_total_amount",
             "order_item_count",
@@ -84,11 +84,11 @@ class TestFeatureColumns:
             "order_discount_rate",
             "order_pay_interval_sec",
             "order_is_night",
-            "order_category_count",
-            # --- 3 addr features (compute_address_features) ---
-            "addr_total_count",
-            "addr_province_count",
-            "addr_is_new",
+            "order_lead_days",
+            # --- 3 trip features (compute_trip_features) ---
+            "trip_traveler_count",
+            "trip_city_count",
+            "trip_is_new_traveler",
         ]
         assert ml_model.FEATURE_COLUMNS == expected, (
             "FEATURE_COLUMNS not aligned with the 25 keys computed by feature.py. "
@@ -131,7 +131,7 @@ class TestModelLoad:
             "user_refund_amount": 0,
             "user_cancel_count": 0,
             "user_complaint_count": 0,
-            "user_address_count": 1,
+            "user_trip_city_count": 1,
             "order_total_amount": 200.0,
             "order_item_count": 1,
             "order_sku_count": 1,
@@ -139,10 +139,10 @@ class TestModelLoad:
             "order_discount_rate": 0.0,
             "order_pay_interval_sec": 60,
             "order_is_night": 0,
-            "order_category_count": 1,
-            "addr_total_count": 1,
-            "addr_province_count": 1,
-            "addr_is_new": 0,
+            "order_lead_days": 1,
+            "trip_traveler_count": 1,
+            "trip_city_count": 1,
+            "trip_is_new_traveler": 0,
         }
         # 3. 准备一组"高风险用户"特征 (强信号, 期望 → 人工审核/拒绝)
         risky_features = dict(normal_features)
@@ -205,7 +205,7 @@ class TestPredict:
         from app.engine.ml_model import FEATURE_COLUMNS
         # 高风险用户: 25 维全部填, 高退款率/短间隔/大额/夜单
         risky = {
-            # 用户画像 (高退款 + 多售后)
+            # 用户画像 (高退款 + 多退改签)
             "user_total_orders": 200,
             "user_orders_30d": 100,
             "user_orders_7d": 50,
@@ -219,7 +219,7 @@ class TestPredict:
             "user_refund_amount": 700000,     # 退款金额也很高
             "user_cancel_count": 50,
             "user_complaint_count": 30,
-            "user_address_count": 8,          # 多地址 (可疑)
+            "user_trip_city_count": 8,          # 多地址 (可疑)
             # 订单特征 (大额 + 短间隔 + 夜单 + 多品类)
             "order_total_amount": 50000,
             "order_item_count": 5,
@@ -227,12 +227,12 @@ class TestPredict:
             "order_discount_amount": 49000,   # 几乎不打折
             "order_discount_rate": 0.02,
             "order_pay_interval_sec": 30,     # 30s 内支付 (极短)
-            "order_is_night": 1,              # 凌晨下单
-            "order_category_count": 5,
+            "order_is_night": 1,              # 凌晨预订
+            "order_lead_days": 5,
             # 地址特征
-            "addr_total_count": 8,
-            "addr_province_count": 3,         # 跨省 (可疑)
-            "addr_is_new": 1,                  # 新地址
+            "trip_traveler_count": 8,
+            "trip_city_count": 3,         # 跨省 (可疑)
+            "trip_is_new_traveler": 1,                  # 新地址
         }
         # 验证 25 维都填了 (否则回退到训练分布外)
         assert set(risky.keys()) >= set(FEATURE_COLUMNS), (

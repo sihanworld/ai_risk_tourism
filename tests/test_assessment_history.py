@@ -114,14 +114,14 @@ class TestListAssessments:
                 self.call_count += 1
                 if self.call_count == 1:
                     return _FakeResult(2)  # count
-                return _FakeResult([(fake_a1, "下单"), (fake_a2, "支付")])  # paged
+                return _FakeResult([(fake_a1, "预订"), (fake_a2, "支付")])  # paged
 
         db = _FakeDB()
         result = await case_service.list_assessments(db, page=1, page_size=20)
         assert result.total == 2
         assert len(result.items) == 2
         # event_type 从 JOIN 拿
-        assert result.items[0].event_type == "下单"
+        assert result.items[0].event_type == "预订"
         assert result.items[1].event_type == "支付"
         # ml_score 浮点
         assert result.items[0].ml_score == 0.85
@@ -169,14 +169,14 @@ class TestGetAssessmentDetail:
             assessment_id="ast1", event_id="evt1", user_id="U1",
             final_score=95, risk_level="极高", decision="拒绝",
             rule_count=2, rule_results=(
-                '[{"rule_id":"R002","rule_name":"单笔极端高额订单","rule_category":"订单欺诈",'
+                '[{"rule_id":"R002","rule_name":"单笔极端高额订单","rule_category":"预订欺诈",'
                 '"risk_level":"极高","risk_score":95,"action":"拒绝","description":null}]'
             ),
             ml_score=0.92, ml_decision="拒绝",
             create_time="2026-08-08 00:00:00",
         )
         fake_ev = SimpleNamespace(
-            event_id="evt1", event_type="下单", event_source_id="ORD000123",
+            event_id="evt1", event_type="预订", event_source_id="ORD000123",
             event_data='{"amount": 15000}',
         )
 
@@ -232,7 +232,7 @@ class TestGetAssessmentDetail:
             create_time="2026-08-08 00:00:00",
         )
         fake_ev = SimpleNamespace(
-            event_id="evt1", event_type="下单", event_source_id="ORD1", event_data=None,
+            event_id="evt1", event_type="预订", event_source_id="ORD1", event_data=None,
         )
 
         class _FakeResult:

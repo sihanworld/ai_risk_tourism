@@ -1,5 +1,5 @@
 """
-电商风控系统 - XGBoost 训练脚本 (一次性, 跑完即可)
+旅游风控系统 - XGBoost 训练脚本 (一次性, 跑完即可)
 数据源: MySQL risk_event + risk_feature + risk_assessment
 步骤:
   1. 拉历史评估 (decision 不为空的, 排除掉 None)

@@ -430,7 +430,7 @@ async def _biz_user_orders(db: AsyncSession, user_id: str, order_id: str, limit:
 
 
 async def _biz_user_postsales(db: AsyncSession, user_id: str, order_id: str, limit: int) -> list[Any]:
-    """用户的售后记录 (3 表 JOIN: postsale → order_detail → order_info)."""
+    """用户的退改签记录 (3 表 JOIN: postsale → order_detail → order_info)."""
     stmt = (
         select(
             Postsale.postsale_id,
@@ -451,7 +451,7 @@ async def _biz_user_postsales(db: AsyncSession, user_id: str, order_id: str, lim
 
 
 async def _biz_user_addresses(db: AsyncSession, user_id: str, order_id: str, limit: int) -> list[Any]:
-    """用户的收货地址."""
+    """用户的出行人/行程信息 (出行人姓名/手机号/目的地城市)."""
     stmt = (
         select(
             ReceiveInfo.receive_id,
@@ -569,7 +569,7 @@ async def _query_business_data_impl(
 @tool(
     description=(
         "对指定用户和事件执行实时风险检查。"
-        "参数: user_id (用户ID, 如 '1001')、event_type (事件类型, 可选值: 下单/支付/售后申请/物流投诉)、source_id (关联业务ID, 如订单号)。"
+        "参数: user_id (用户ID, 如 '1001')、event_type (事件类型, 可选值: 预订/支付/退改签/行程开始)、source_id (关联业务ID, 如订单号)。"
         "返回: 风控评估结果字符串, 含评分、风险等级、决策和命中规则。"
         "内部: 走 process_event 7 步流水线 (校验→黑名单→补全→决策)。"
     )
@@ -594,7 +594,7 @@ async def query_cases(status: str = "", page: int = 1) -> str:
     description=(
         "查询用户的风险画像信息。"
         "参数: user_id (用户ID, 如 '1001')。"
-        "返回: 用户的风险评分、订单统计、退款率、地址数等画像数据; 没画像时实时算 14 个 user 特征。"
+        "返回: 用户的风险评分、预订统计、退改率、出行目的地城市数等画像数据; 没画像时实时算 14 个 user 特征。"
     )
 )
 async def query_user_profile(user_id: str) -> str:
@@ -649,7 +649,7 @@ async def analyze_rule_effectiveness() -> str:
 @tool(
     description=(
         "查询业务数据, 用于数据分析和风控辅助判断。"
-        "参数: query_type (查询类型, 可选值: user_orders/user_postsales/user_addresses/order_detail/recent_orders/high_value_orders)、user_id (部分需要)、order_id (部分需要)、limit (返回数量, 默认10)。"
+        "参数: query_type (查询类型, 可选值: user_orders(用户预订订单)/user_postsales(用户退改签)/user_addresses(用户出行人行程信息)/order_detail(订单明细)/recent_orders(最近订单)/high_value_orders(高价值订单))、user_id (部分需要)、order_id (部分需要)、limit (返回数量, 默认10)。"
         "返回: 业务数据 (JSON 字符串)。"
     )
 )

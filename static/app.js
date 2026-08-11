@@ -1,5 +1,5 @@
 ﻿/**
- * 电商风控系统 - 公共前端工具函数
+ * 旅游风控系统 - 公共前端工具函数
  */
 
 // 风险等级对应的Badge类名
@@ -166,36 +166,36 @@ function buildPaginationHtml(currentPage, totalPages, pageSize, loadFnName, cont
  *   - 双向: UI ↔ JSON 互相转换
  * ============================================================ */
 
-// 1. 26 特征 key↔中文标签 (跟 ml_model.py FEATURE_COLUMNS 对齐, 中文按业务语义)
+// 1. 25 特征 key↔中文标签 (跟 ml_model.py FEATURE_COLUMNS 对齐, 中文按旅游业务语义)
 const FEATURE_LABELS = {
     // 用户画像 (14 维)
-    "user_total_orders":         "用户总订单数",
-    "user_orders_30d":           "用户30天订单数",
-    "user_orders_7d":            "用户7天订单数",
-    "user_total_amount":         "用户累计消费金额",
-    "user_avg_order_amount":     "用户平均订单金额",
+    "user_total_orders":         "用户总预订数",
+    "user_orders_30d":           "用户30天预订数",
+    "user_orders_7d":            "用户7天预订数",
+    "user_total_amount":         "用户累计旅游消费",
+    "user_avg_order_amount":     "用户平均预订金额",
     "user_max_order_amount":     "用户最大单笔金额",
-    "user_refund_count":         "用户退款次数",
-    "user_postsale_count":       "用户售后次数",
+    "user_refund_count":         "用户退款/退订次数",
+    "user_postsale_count":       "用户退改签次数",
     "user_refund_rate":          "用户退款率",
-    "user_postsale_rate":        "用户售后率",
+    "user_postsale_rate":        "用户退改率",
     "user_refund_amount":        "用户退款金额",
-    "user_cancel_count":         "用户取消订单次数",
-    "user_complaint_count":      "用户投诉次数",
-    "user_address_count":        "用户使用地址数",
+    "user_cancel_count":         "用户取消预订次数",
+    "user_complaint_count":      "用户行程投诉次数",
+    "user_trip_city_count":      "用户出行目的地城市数",
     // 订单画像 (8 维)
     "order_total_amount":        "订单总金额",
-    "order_item_count":          "订单商品件数",
-    "order_sku_count":           "订单SKU种类数",
+    "order_item_count":          "订单行程明细数",
+    "order_sku_count":           "预订数量(间夜/张/人次)",
     "order_discount_amount":     "订单优惠金额",
     "order_discount_rate":       "订单折扣率",
-    "order_pay_interval_sec":    "下单到支付间隔(秒)",
-    "order_is_night":            "是否凌晨下单",
-    "order_category_count":      "订单商品类目数",
-    // 地址画像 (3 维)
-    "addr_total_count":          "用户地址总数",
-    "addr_province_count":       "用户地址跨省数",
-    "addr_is_new":               "是否新地址",
+    "order_pay_interval_sec":    "预订到支付间隔(秒)",
+    "order_is_night":            "是否深夜预订",
+    "order_lead_days":           "预订提前天数(出行-预订)",
+    // 行程画像 (3 维)
+    "trip_traveler_count":       "出行人数量",
+    "trip_city_count":           "出行目的地城市数",
+    "trip_is_new_traveler":      "是否新出行人",
 };
 
 // 反向: 中文标签 → key (前端下拉显示中文, 内部存 key)
@@ -213,10 +213,10 @@ const RISK_LEVEL_SCORE_MAP = {
 
 // 3. 按 event_type 拆的阈值 (跟后端 config.py RISK_EVENT_THRESHOLDS 一致)
 const RISK_EVENT_THRESHOLDS = {
-    "下单":     {pass: 30, mark: 60, review: 80},
+    "预订":     {pass: 30, mark: 60, review: 80},
     "支付":     {pass: 25, mark: 55, review: 75},
-    "售后申请":  {pass: 40, mark: 70, review: 85},
-    "物流投诉":  {pass: 35, mark: 65, review: 80},
+    "退改签":    {pass: 40, mark: 70, review: 85},
+    "行程开始":  {pass: 35, mark: 65, review: 80},
     "通用":     {pass: 30, mark: 60, review: 80},
 };
 

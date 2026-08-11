@@ -74,7 +74,7 @@ class TestRiskEventThresholds:
 
     def test_all_event_types_defined(self):
         assert set(settings.RISK_EVENT_THRESHOLDS.keys()) == {
-            "下单", "支付", "售后申请", "物流投诉", "通用"
+            "预订", "支付", "退改签", "行程开始", "通用"
         }
 
     def test_each_event_type_has_3_thresholds(self):
@@ -90,8 +90,8 @@ class TestRiskEventThresholds:
     def test_get_event_thresholds_with_fallback(self):
         """get_event_thresholds 找不到时 fallback 到全局."""
         # 命中: 返回对应 event_type 阈值
-        th = settings.get_event_thresholds("售后申请")
-        assert th["pass"] == 40  # 售后更严
+        th = settings.get_event_thresholds("退改签")
+        assert th["pass"] == 40  # 退改签更严
         # fallback: 通用阈值
         th_fallback = settings.get_event_thresholds("通用")
         assert th_fallback == {
@@ -103,18 +103,18 @@ class TestRiskEventThresholds:
         th_unknown = settings.get_event_thresholds("不存在的")
         assert th_unknown == th_fallback
 
-    def test_售后_比_下单_严(self):
-        """售后/支付阈值应该 >= 下单 (业务: 薅羊毛防风险)."""
-        th_下单 = settings.RISK_EVENT_THRESHOLDS["下单"]
-        th_售后 = settings.RISK_EVENT_THRESHOLDS["售后申请"]
+    def test_退改签_比_预订_严(self):
+        """退改签/支付阈值应该 >= 预订 (业务: 防恶意退改薅羊毛)."""
+        th_预订 = settings.RISK_EVENT_THRESHOLDS["预订"]
+        th_退改签 = settings.RISK_EVENT_THRESHOLDS["退改签"]
         th_支付 = settings.RISK_EVENT_THRESHOLDS["支付"]
-        # 售后 pass 阈值应该 >= 下单 pass (更严格)
-        assert th_售后["pass"] >= th_下单["pass"], (
-            "售后应该比下单严 (pass 阈值更高)"
+        # 退改签 pass 阈值应该 >= 预订 pass (更严格)
+        assert th_退改签["pass"] >= th_预订["pass"], (
+            "退改签应该比预订严 (pass 阈值更高)"
         )
-        # 支付 pass 阈值应该 <= 下单 pass (支付更敏感)
-        assert th_支付["pass"] <= th_下单["pass"], (
-            "支付应该比下单敏感 (pass 阈值更低)"
+        # 支付 pass 阈值应该 <= 预订 pass (支付更敏感)
+        assert th_支付["pass"] <= th_预订["pass"], (
+            "支付应该比预订敏感 (pass 阈值更低)"
         )
 
 
@@ -139,12 +139,12 @@ class TestScoreToLevelWithEventType:
 
     def test_score_to_level_with_event_type(self):
         from app.engine.decision import _score_to_level
-        # 售后: pass=40, mark=70, review=85
-        assert _score_to_level(39, "售后申请") == "低"
-        assert _score_to_level(40, "售后申请") == "中"
-        assert _score_to_level(69, "售后申请") == "中"
-        assert _score_to_level(70, "售后申请") == "高"
-        assert _score_to_level(85, "售后申请") == "极高"
+        # 退改签: pass=40, mark=70, review=85
+        assert _score_to_level(39, "退改签") == "低"
+        assert _score_to_level(40, "退改签") == "中"
+        assert _score_to_level(69, "退改签") == "中"
+        assert _score_to_level(70, "退改签") == "高"
+        assert _score_to_level(85, "退改签") == "极高"
 
     def test_score_to_decision_with_event_type(self):
         from app.engine.decision import _score_to_decision
@@ -229,7 +229,7 @@ class TestFrontendRuleBuilder:
 
     @pytest.fixture
     def appjs(self):
-        p = Path("D:/workroom/尚硅谷大模型项目之风控系统/3.代码/AI_Risk/static/app.js")
+        p = Path(__file__).resolve().parent.parent / "static" / "app.js"
         return p.read_text(encoding="utf-8")
 
     def test_has_feature_labels_dict(self, appjs):
@@ -258,7 +258,7 @@ class TestFrontendRuleBuilder:
             labels_block = appjs[labels_start:labels_end]
             keys_in_labels = re.findall(r'"([a-z]+_[a-z_0-9]+)"\s*:\s*"', labels_block)
             # 排除掉 "FEATURE_LABELS" / "LABEL_TO_FEATURE" 等非特征的 key
-            feature_keys = [k for k in keys_in_labels if k.startswith(("user_", "order_", "addr_"))]
+            feature_keys = [k for k in keys_in_labels if k.startswith(("user_", "order_", "trip_"))]
             assert len(feature_keys) >= 25, (
                 f"FEATURE_LABELS 应有 25 维, 实际 {len(feature_keys)}: {feature_keys[:5]}"
             )
@@ -271,7 +271,7 @@ class TestFrontendRuleBuilder:
 
     def test_has_risk_event_thresholds(self, appjs):
         assert "RISK_EVENT_THRESHOLDS" in appjs
-        for et in ["下单", "支付", "售后申请", "物流投诉", "通用"]:
+        for et in ["预订", "支付", "退改签", "行程开始", "通用"]:
             assert f'"{et}"' in appjs
 
     def test_has_builder_functions(self, appjs):
@@ -290,7 +290,7 @@ class TestFrontendRulesPage:
 
     @pytest.fixture
     def html(self):
-        p = Path("D:/workroom/尚硅谷大模型项目之风控系统/3.代码/AI_Risk/templates/rules.html")
+        p = Path(__file__).resolve().parent.parent / "templates" / "rules.html"
         return p.read_text(encoding="utf-8")
 
     def test_uses_cond_builder(self, html):

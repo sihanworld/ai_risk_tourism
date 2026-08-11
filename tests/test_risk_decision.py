@@ -27,13 +27,13 @@ class TestScoreCalculation:
         assert calculate_final_score([]) == 0
 
     def test_single_hit(self):
-        hit = RuleHitResult(_MockRule("R1", "测试", "订单欺诈", "高", 70, "人工审核"))
+        hit = RuleHitResult(_MockRule("R1", "测试", "预订欺诈", "高", 70, "人工审核"))
         assert calculate_final_score([hit]) == 70
 
     def test_multiple_hits_bonus(self):
         """多规则命中: max + BONUS × extra_count"""
         hits = [
-            RuleHitResult(_MockRule("R1", "测试1", "订单欺诈", "高", 70, "人工审核")),
+            RuleHitResult(_MockRule("R1", "测试1", "预订欺诈", "高", 70, "人工审核")),
             RuleHitResult(_MockRule("R2", "测试2", "支付风险", "中", 40, "标记")),
             RuleHitResult(_MockRule("R3", "测试3", "账户风险", "低", 20, "通过")),
         ]
@@ -110,7 +110,7 @@ class TestVetoHardVetoAfterFusion:
 
         # 模拟一票否决规则: R002 (极高, 95 分)
         veto_hit = RuleHitResult(_MockRule(
-            "R002", "单笔极端高额订单", "订单欺诈", "极高", 95, "拒绝",
+            "R002", "单笔极端高额订单", "预订欺诈", "极高", 95, "拒绝",
         ))
 
         # mock 掉 decision 模块内引用的 predict (不是 ml_model.predict)
@@ -165,7 +165,7 @@ class TestVetoHardVetoAfterFusion:
 
         # 普通高风险规则 (不是 veto)
         normal_hit = RuleHitResult(_MockRule(
-            "R001", "单笔超高金额", "订单欺诈", "高", 70, "人工审核",
+            "R001", "单笔超高金额", "预订欺诈", "高", 70, "人工审核",
         ))
 
         class _FakeMlResult:
@@ -191,7 +191,7 @@ class TestCaseDeduplication:
     """
     【P1-S6 修复 2026-08-07】同一 (source_id, event_type) 不应建多个未结案.
 
-    场景: 同一订单的"下单"事件被前端重试 3 次, 每次都触发"人工审核"
+    场景: 同一订单的"预订"事件被前端重试 3 次, 每次都触发"人工审核"
           决策. 原代码会建 3 个 case. 修复后: 第 2/3 次直接 skip.
     """
     @pytest.mark.asyncio
@@ -203,13 +203,13 @@ class TestCaseDeduplication:
 
         # mock ctx
         request = RiskCheckRequest(
-            event_type="下单", source_id="order_001", user_id="1001",
+            event_type="预订", source_id="order_001", user_id="1001",
         )
         ctx = SimpleNamespace(
             request=request,
             user_id="1001",
         )
-        hit = RuleHitResult(_MockRule("R1", "测试", "订单欺诈", "高", 70, "人工审核"))
+        hit = RuleHitResult(_MockRule("R1", "测试", "预订欺诈", "高", 70, "人工审核"))
 
         # mock db: execute 返回已有 case_id
         existing_case_id = "cas_existing_xxx"
@@ -242,10 +242,10 @@ class TestCaseDeduplication:
         from types import SimpleNamespace
 
         request = RiskCheckRequest(
-            event_type="下单", source_id="order_002", user_id="1001",
+            event_type="预订", source_id="order_002", user_id="1001",
         )
         ctx = SimpleNamespace(request=request, user_id="1001")
-        hit = RuleHitResult(_MockRule("R1", "测试", "订单欺诈", "高", 70, "人工审核"))
+        hit = RuleHitResult(_MockRule("R1", "测试", "预订欺诈", "高", 70, "人工审核"))
 
         class _FakeResult:
             def scalar_one_or_none(self):
@@ -267,7 +267,7 @@ class TestCaseDeduplication:
         assert len(db.added) == 1, f"应 add 1 个 case, 实际 {len(db.added)}"
         assert db.added[0].case_status == "待审核"
         assert db.added[0].source_id == "order_002"
-        assert db.added[0].event_type == "下单"
+        assert db.added[0].event_type == "预订"
 
     @pytest.mark.asyncio
     async def test_pass_decision_skips_creation(self):
@@ -277,10 +277,10 @@ class TestCaseDeduplication:
         from types import SimpleNamespace
 
         request = RiskCheckRequest(
-            event_type="下单", source_id="order_003", user_id="1001",
+            event_type="预订", source_id="order_003", user_id="1001",
         )
         ctx = SimpleNamespace(request=request, user_id="1001")
-        hit = RuleHitResult(_MockRule("R1", "测试", "订单欺诈", "高", 70, "人工审核"))
+        hit = RuleHitResult(_MockRule("R1", "测试", "预订欺诈", "高", 70, "人工审核"))
 
         # db.execute 调了就报错 (说明代码去查重了, 不该)
         class _FakeDB:
@@ -312,12 +312,12 @@ class TestCaseDeduplication:
         from types import SimpleNamespace
 
         request = RiskCheckRequest(
-            event_type="下单", source_id="order_reject_001", user_id="U001",
+            event_type="预订", source_id="order_reject_001", user_id="U001",
         )
         ctx = SimpleNamespace(request=request, user_id="U001")
         # R002 风格: risk_level="极高" risk_score=95
         hit = RuleHitResult(_MockRule("R002", "单笔极端高额订单",
-                                      "订单欺诈", "极高", 95, "拒绝"))
+                                      "预订欺诈", "极高", 95, "拒绝"))
 
         class _FakeResult:
             def scalar_one_or_none(self):
@@ -356,11 +356,11 @@ class TestCaseDeduplication:
         from types import SimpleNamespace
 
         request = RiskCheckRequest(
-            event_type="下单", source_id="order_review_001", user_id="U002",
+            event_type="预订", source_id="order_review_001", user_id="U002",
         )
         ctx = SimpleNamespace(request=request, user_id="U002")
         hit = RuleHitResult(_MockRule("R005", "高折扣率订单",
-                                      "订单欺诈", "高", 65, "人工审核"))
+                                      "预订欺诈", "高", 65, "人工审核"))
 
         class _FakeResult:
             def scalar_one_or_none(self):
@@ -395,7 +395,7 @@ class TestCaseCategoryAggregation:
 
     @pytest.mark.asyncio
     async def test_majority_category_wins(self):
-        """3 条支付风险 + 1 条订单欺诈 → 分类 = 支付风险 (命中数最多)"""
+        """3 条支付风险 + 1 条预订欺诈 → 分类 = 支付风险 (命中数最多)"""
         from app.engine import decision
         from app.schemas import RiskCheckRequest
         from types import SimpleNamespace
@@ -409,7 +409,7 @@ class TestCaseCategoryAggregation:
             RuleHitResult(_MockRule("R007", "30天30单", "支付风险", "极高", 90, "拒绝")),
             RuleHitResult(_MockRule("R006", "7天10单", "支付风险", "高", 70, "人工审核")),
             RuleHitResult(_MockRule("R008", "金额异常", "支付风险", "高", 65, "人工审核")),
-            RuleHitResult(_MockRule("R001", "5000+", "订单欺诈", "高", 70, "人工审核")),
+            RuleHitResult(_MockRule("R001", "5000+", "预订欺诈", "高", 70, "人工审核")),
         ]
 
         class _FakeResult:
@@ -431,7 +431,7 @@ class TestCaseCategoryAggregation:
         case = next((x for x in db.added if x.__class__.__name__ == "RiskCase"), None)
         log = next((x for x in db.added if x.__class__.__name__ == "RiskActionLog"), None)
         assert case is not None and log is not None
-        # 3 条支付风险 vs 1 条订单欺诈 → 取多的
+        # 3 条支付风险 vs 1 条预订欺诈 → 取多的
         assert case.case_category == "支付风险", (
             f"应取命中数最多的 '支付风险', 实际 {case.case_category}"
         )
@@ -444,13 +444,13 @@ class TestCaseCategoryAggregation:
         from types import SimpleNamespace
 
         request = RiskCheckRequest(
-            event_type="下单", source_id="order_y", user_id="1001",
+            event_type="预订", source_id="order_y", user_id="1001",
         )
         ctx = SimpleNamespace(request=request, user_id="1001")
-        # 1 条订单欺诈 + 1 条地址风险 → 平局
+        # 1 条预订欺诈 + 1 条行程风险 → 平局
         rules = [
-            RuleHitResult(_MockRule("R1", "a", "订单欺诈", "高", 70, "人工审核")),
-            RuleHitResult(_MockRule("R2", "b", "地址风险", "高", 70, "人工审核")),
+            RuleHitResult(_MockRule("R1", "a", "预订欺诈", "高", 70, "人工审核")),
+            RuleHitResult(_MockRule("R2", "b", "行程风险", "高", 70, "人工审核")),
         ]
 
         class _FakeResult:
@@ -469,4 +469,4 @@ class TestCaseCategoryAggregation:
         db = _FakeDB()
         await decision._maybe_create_case(db, "ast_xxx", ctx, rules, 80, "人工审核")
         # 平局时, Counter.most_common 返回先出现的 (Python 3.7+ dict 有序)
-        assert db.added[0].case_category in ("订单欺诈", "地址风险")
+        assert db.added[0].case_category in ("预订欺诈", "行程风险")

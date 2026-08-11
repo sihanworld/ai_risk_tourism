@@ -96,12 +96,12 @@ class TestRuleHitResultToDict:
     def test_to_dict_all_fields(self):
         """所有字段都正确转换"""
         rule = _mock_rule("R1", {}, score=80, level="高", action="人工审核",
-                          name="高额订单", category="订单欺诈")
+                          name="高额订单", category="预订欺诈")
         hit = RuleHitResult(rule)
         d = hit.to_dict()
         assert d["rule_id"] == "R1"
         assert d["rule_name"] == "高额订单"
-        assert d["rule_category"] == "订单欺诈"
+        assert d["rule_category"] == "预订欺诈"
         assert d["risk_level"] == "高"
         assert d["risk_score"] == 80
         assert d["action"] == "人工审核"
