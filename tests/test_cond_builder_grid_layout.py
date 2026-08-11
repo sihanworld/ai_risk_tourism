@@ -47,8 +47,16 @@ class TestModalSize:
         assert "modal-dialog-scrollable" in classes, "需要 modal-dialog-scrollable 让长内容可滚"
 
     def test_no_modal_lg(self, rules_html):
-        """不应该用 modal-lg (太窄 800px)."""
-        assert "modal-lg" not in rules_html, "modal-lg 太窄, 已升级 modal-xl"
+        """主规则 modal 不应该用 modal-lg (太窄 800px).
+        单独的 JSON 查看弹窗 modal 仍然用 modal-lg (只读, 800 够用)."""
+        m = re.search(
+            r'<div\s+class="modal-dialog\s+([^"]+)"\s*>\s*<div\s+class="modal-content">\s*<div\s+class="modal-header">\s*<h5\s+class="modal-title"\s+id="ruleModalTitle">',
+            rules_html,
+        )
+        assert m, "主规则 modal-dialog 找不到"
+        classes = m.group(1)
+        assert "modal-lg" not in classes, f"主规则 modal 不应 modal-lg, 实际: {classes}"
+        assert "modal-xl" in classes, f"主规则 modal 必须 modal-xl, 实际: {classes}"
 
 
 class TestCondLeafGridLayout:

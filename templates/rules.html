@@ -114,16 +114,38 @@
                         </div>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">条件表达式 (可视化构建器)</label>
+                        <label class="form-label">条件表达式</label>
+                        <!-- [P4-L5 2026-08-11] 可视化 / JSON 编辑两种模式切换 -->
+                        <div class="d-flex align-items-center mb-2">
+                            <div class="btn-group btn-group-sm" role="group">
+                                <button type="button" class="btn btn-outline-primary active"
+                                        id="condModeBuilder" onclick="setCondMode('builder')">
+                                    <i class="bi bi-grid-3x3-gap"></i> 可视化
+                                </button>
+                                <button type="button" class="btn btn-outline-primary"
+                                        id="condModeJson" onclick="setCondMode('json')">
+                                    <i class="bi bi-braces"></i> JSON 编辑
+                                </button>
+                            </div>
+                            <small class="text-muted ms-3">
+                                可视化模式点 +/-; JSON 模式直接编辑, 校验后保存.
+                            </small>
+                        </div>
                         <div id="condBuilder" class="p-2 border rounded"
                              style="background: #f8f9fa; min-height: 60px;">
-                            <!-- JS 动态构建 and/or 树, 替换原来的 textarea -->
+                            <!-- JS 动态构建 and/or 树 -->
                         </div>
-                        <small class="text-muted">
-                            点"+ 条件"加单条件, 点"+ 分组"加 AND/OR 组合. 字段下拉显示中文标签.
-                            <a href="#" onclick="showRawConditionJson(); return false;">查看 JSON</a>
+                        <div id="condJsonEditor" class="d-none">
+                            <textarea id="f_condition" class="form-control font-monospace" rows="10"
+                                      style="background: #f8f9fa; font-size: 13px;"
+                                      placeholder='{"and": [{"field": "...", "op": "...", "value": 0}]}'
+                                      oninput="onCondJsonInput()"></textarea>
+                            <div id="condJsonError" class="text-danger small mt-1" style="display:none;"></div>
+                        </div>
+                        <small class="text-muted d-block mt-1">
+                            <a href="#" onclick="showRawConditionJson(); return false;">查看 JSON (弹窗)</a>
+                            <span class="ms-2 text-muted">| 26 特征 / 10 op 支持: <code>&gt; &gt;= &lt; &lt;= == != in not_in between</code></span>
                         </small>
-                        <textarea id="f_condition" class="form-control d-none" rows="3"></textarea>
                     </div>
                     <div class="row mb-3">
                         <div class="col-md-3">
@@ -223,6 +245,14 @@ function showCreateModal() {
     document.getElementById('ruleModalTitle').textContent = '新建规则';
     document.getElementById('ruleForm').reset();
     document.getElementById('f_rule_id').disabled = false;
+    // [P4-L5 2026-08-11] 强制重置条件编辑模式为 builder (清掉上次可能留在 JSON 模式的 textarea)
+    _condMode = 'builder';
+    document.getElementById('condModeBuilder').classList.add('active');
+    document.getElementById('condModeJson').classList.remove('active');
+    document.getElementById('condBuilder').classList.remove('d-none');
+    document.getElementById('condJsonEditor').classList.add('d-none');
+    document.getElementById('condJsonError').style.display = 'none';
+    document.getElementById('f_condition').value = '';
     // 初始化可视化构建器: 1 个 AND 分组, 默认 1 个空条件框
     // [P4-L5 2026-08-11] 用户改主意: 默认只 1 个空条件, + 条件按钮加 1 行, 更干净
     // [P4-L5 2026-08-10 修复] 双保险: 立即调一次 (setTimeout 0) + shown.bs.modal 兜底
@@ -262,9 +292,17 @@ async function editRule(ruleId) {
     document.getElementById('f_risk_level').value = r.risk_level;
     document.getElementById('f_score').value = r.risk_score;
     document.getElementById('f_action').value = r.action;
+    // [P4-L5 2026-08-11] 同步条件 JSON 到 JSON 编辑器 textarea (跟可视化模式共享同一份数据)
     document.getElementById('f_condition').value = JSON.stringify(r.rule_condition, null, 2);
     document.getElementById('f_priority').value = r.priority;
     document.getElementById('f_description').value = r.description || '';
+    // [P4-L5 2026-08-11] 强制重置模式为 builder (edit 始终从可视化起手, 用户可点 JSON 按钮切)
+    _condMode = 'builder';
+    document.getElementById('condModeBuilder').classList.add('active');
+    document.getElementById('condModeJson').classList.remove('active');
+    document.getElementById('condBuilder').classList.remove('d-none');
+    document.getElementById('condJsonEditor').classList.add('d-none');
+    document.getElementById('condJsonError').style.display = 'none';
     // [P4-L5 2026-08-10 修复] 跟 showCreateModal 一样, buildConditionUI 放到 shown 之后
     // 同样双保险: shown 回调 + setTimeout 兜底
     const modalEl = document.getElementById('ruleModal');
@@ -282,11 +320,31 @@ async function editRule(ruleId) {
 }
 
 async function saveRule() {
-    // 【P4-L5 2026-08-10】从可视化构建器收集 JSON, 替代 JSON.parse(textarea)
-    // [P4-L5 2026-08-10] 默认 3 个空 leaf, saveRule 时跳过 op='' (占位, 未填) 的 leaf,
-    // 否则空 placeholder 也被存进数据库, 跟用户实际意图不符
-    const condBuilder = document.getElementById('condBuilder');
-    const condition = stripEmptyLeaves(collectCondition(condBuilder));
+    // [P4-L5 2026-08-11] 条件数据从当前模式 (builder / json) 收, stripEmptyLeaves 跳过空 leaf
+    let condition;
+    if (_condMode === 'json') {
+        // JSON 模式: 直接读 textarea
+        const txt = document.getElementById('f_condition').value.trim();
+        if (!txt) {
+            alert('条件 JSON 不能为空');
+            return;
+        }
+        try {
+            condition = JSON.parse(txt);
+        } catch (e) {
+            alert('条件 JSON 解析失败: ' + e.message);
+            return;
+        }
+        if (typeof condition !== 'object' || (!condition.and && !condition.or)) {
+            alert('条件 JSON 必须是 {and: [...]} 或 {or: [...]} 格式');
+            return;
+        }
+        condition = stripEmptyLeaves(condition);
+    } else {
+        // builder 模式: 收集 UI
+        const condBuilder = document.getElementById('condBuilder');
+        condition = stripEmptyLeaves(collectCondition(condBuilder));
+    }
     // 同步到隐藏 textarea (留作 fallback / 调试)
     document.getElementById('f_condition').value = JSON.stringify(condition, null, 2);
 
@@ -342,10 +400,143 @@ function autoFillScoreByLevel() {
     document.getElementById('f_score').value = mid;
 }
 
-// 调试用: 弹窗显示当前条件 JSON
+// [P4-L5 2026-08-11] 条件表达式 2 种编辑模式: 可视化构建器 / JSON 文本
+// 切换时数据互转: 切到 JSON 模式把当前构建器内容序列化为文本;
+// 切回可视化模式用 buildConditionUI(text -> JSON) 重新渲染
+let _condMode = 'builder';  // 'builder' | 'json'
+
+function setCondMode(mode) {
+    if (mode === _condMode) return;
+    const builderDiv = document.getElementById('condBuilder');
+    const jsonDiv = document.getElementById('condJsonEditor');
+    const btnBuilder = document.getElementById('condModeBuilder');
+    const btnJson = document.getElementById('condModeJson');
+    const errBox = document.getElementById('condJsonError');
+
+    if (mode === 'json') {
+        // builder -> json: 序列化当前 UI
+        const cond = collectCondition(document.getElementById('condBuilder'));
+        document.getElementById('f_condition').value = JSON.stringify(cond, null, 2);
+        builderDiv.classList.add('d-none');
+        jsonDiv.classList.remove('d-none');
+        btnBuilder.classList.remove('active');
+        btnJson.classList.add('active');
+        errBox.style.display = 'none';
+        errBox.textContent = '';
+    } else {
+        // json -> builder: 校验 JSON 合法 + 渲染
+        const txt = document.getElementById('f_condition').value.trim();
+        if (txt) {
+            try {
+                const parsed = JSON.parse(txt);
+                // 简单校验: 必须是对象, 有 and 或 or 数组
+                if (typeof parsed !== 'object' || (!parsed.and && !parsed.or)) {
+                    throw new Error('JSON 必须是 {and: [...]} 或 {or: [...]} 格式');
+                }
+                buildConditionUI(parsed, 'condBuilder');
+            } catch (e) {
+                errBox.textContent = 'JSON 解析失败: ' + e.message + ' (保持在 JSON 模式)';
+                errBox.style.display = 'block';
+                return;  // 不切模式
+            }
+        } else {
+            // 空 -> 走默认 1 个空 leaf
+            buildConditionUI({and: [{field: 'user_total_orders', op: '>=', value: 0}]}, 'condBuilder');
+        }
+        jsonDiv.classList.add('d-none');
+        builderDiv.classList.remove('d-none');
+        btnJson.classList.remove('active');
+        btnBuilder.classList.add('active');
+        errBox.style.display = 'none';
+        errBox.textContent = '';
+    }
+    _condMode = mode;
+}
+
+// JSON 编辑器输入时实时校验 (但不切换模式), 错误显示在 #condJsonError
+function onCondJsonInput() {
+    const errBox = document.getElementById('condJsonError');
+    const txt = document.getElementById('f_condition').value.trim();
+    if (!txt) {
+        errBox.style.display = 'none';
+        return;
+    }
+    try {
+        const parsed = JSON.parse(txt);
+        if (typeof parsed !== 'object' || (!parsed.and && !parsed.or)) {
+            errBox.textContent = 'JSON 必须是 {and: [...]} 或 {or: [...]} 格式';
+            errBox.style.display = 'block';
+        } else {
+            errBox.style.display = 'none';
+        }
+    } catch (e) {
+        errBox.textContent = 'JSON 解析失败: ' + e.message;
+        errBox.style.display = 'block';
+    }
+}
+
+// 调试 / 复制用: 弹窗显示当前条件 JSON (用 modal 不用 alert, 可复制可关闭)
 function showRawConditionJson() {
-    const cond = collectCondition(document.getElementById('condBuilder'));
-    alert(JSON.stringify(cond, null, 2));
+    let cond;
+    if (_condMode === 'json') {
+        // 当前在 JSON 模式, 直接拿 textarea 内容
+        try {
+            cond = JSON.parse(document.getElementById('f_condition').value || '{}');
+        } catch (e) {
+            cond = {error: e.message};
+        }
+    } else {
+        cond = collectCondition(document.getElementById('condBuilder'));
+    }
+    const pretty = JSON.stringify(cond, null, 2);
+    // 用简单 modal (Bootstrap 5 不需要新 HTML, 动态创建)
+    let modalEl = document.getElementById('condJsonViewerModal');
+    if (!modalEl) {
+        modalEl = document.createElement('div');
+        modalEl.id = 'condJsonViewerModal';
+        modalEl.className = 'modal fade';
+        modalEl.tabIndex = -1;
+        modalEl.innerHTML = `
+            <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">条件 JSON (只读, 可复制)</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <pre id="condJsonViewerPre" class="font-monospace small"
+                             style="background: #f8f9fa; padding: 12px; max-height: 60vh; overflow: auto;"></pre>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary"
+                                onclick="copyCondJsonFromViewer()">复制到剪贴板</button>
+                        <button type="button" class="btn btn-primary" data-bs-dismiss="modal">关闭</button>
+                    </div>
+                </div>
+            </div>`;
+        document.body.appendChild(modalEl);
+    }
+    document.getElementById('condJsonViewerPre').textContent = pretty;
+    new bootstrap.Modal(modalEl).show();
+}
+
+// 弹窗里"复制"按钮
+function copyCondJsonFromViewer() {
+    const txt = document.getElementById('condJsonViewerPre').textContent;
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText(txt).then(
+            () => alert('已复制到剪贴板'),
+            () => alert('复制失败, 请手动选中复制')
+        );
+    } else {
+        // 降级: 选中文本
+        const range = document.createRange();
+        range.selectNodeContents(document.getElementById('condJsonViewerPre'));
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+        alert('已选中 JSON 文本, 请按 Ctrl+C 复制');
+    }
 }
 loadRules();
 </script>
